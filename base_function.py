@@ -6,6 +6,7 @@ import pandas as pd
 from scipy.stats import pearsonr
 from sklearn.model_selection import KFold
 import random
+from scipy.integrate import trapezoid  # 梯形积分
 
 
 def evaluate_model_plot(y_true, y_predict, show=False):
@@ -92,7 +93,7 @@ def top_train_test_split(df, y_col, test_ratio=0.2):
 
 
 def evaluation_top_val(y_train_predict, y_predict):
-    from scipy.integrate import trapezoid  # 梯形积分
+
     # 预测值从[y_predict_min,max(y_train_predict,y_predict)] 分割 计算precision
     y_predict_min = min(y_predict)
     precision_value_list = []
