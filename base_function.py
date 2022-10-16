@@ -91,6 +91,23 @@ def top_train_test_split(df, y_col, test_ratio=0.2):
     return df_train, df_test
 
 
+def evaluation_top_val(y_train_predict, y_predict):
+    from scipy.integrate import trapezoid  # 梯形积分
+    # 预测值从[y_predict_min,max(y_train_predict,y_predict)] 分割 计算precision
+    y_predict_min = min(y_predict)
+    precision_value_list = []
+    predict_value_list = []
+    for predict_value in np.linspace(y_predict_min, max(max(y_train_predict), max(y_predict)), 30):
+        precision_value = np.sum(y_predict >= predict_value) / (np.sum(y_predict >= predict_value) + np.sum(
+            y_train_predict >= predict_value))
+        precision_value_list.append(precision_value)  # y axis
+        predict_value_list.append(predict_value)  # x axis
+
+    scaled_predict_value = (predict_value_list - predict_value_list[0]) / (
+            predict_value_list[-1] - (predict_value_list[0]))
+    top_validation_score = trapezoid(precision_value_list, scaled_predict_value)
+    return top_validation_score
+
 def model_fit_evaluation(model, x_train, y_train, x_test, y_test, n_fold=5):
     """clf:
     x_train：训练集+验证集 用于计算交叉验证误差  np.array
@@ -182,5 +199,6 @@ def get_chemical_formula(dataset):
                 single_formula.append(str(dataset.at[i, col]))
         chemistry_formula.append("".join(single_formula))
     return chemistry_formula
+
 
 
