@@ -199,9 +199,10 @@ def get_chemical_formula(dataset):
         for col in elements_columns:
             if (dataset.at[i, col]) > 0:
                 mol = dataset.at[i, col]/atoms_weight[col]
-                sum_mol = sum_mol + dataset.at[i, col]/atoms_weight[col]
+                sum_mol = sum_mol + mol
         for col in elements_columns:
             if (dataset.at[i, col]) > 0:
+                mol = dataset.at[i, col] / atoms_weight[col]
                 single_formula.append(col)
                 single_formula.append(str(100 * mol/sum_mol))
         chemistry_formula.append("".join(single_formula))
