@@ -7,7 +7,8 @@ from scipy.stats import pearsonr
 from sklearn.model_selection import KFold
 import random
 from scipy.integrate import trapezoid  # 梯形积分
-
+from scipy import stats
+import numpy as np
 
 def evaluate_model_plot(y_true, y_predict, show=False):
     """
@@ -109,6 +110,7 @@ def evaluation_top_val(y_train_predict, y_predict):
     top_validation_score = trapezoid(precision_value_list, scaled_predict_value)
     return top_validation_score
 
+
 def model_fit_evaluation(model, x_train, y_train, x_test, y_test, n_fold=5):
     """clf:
     x_train：训练集+验证集 用于计算交叉验证误差  np.array
@@ -200,6 +202,29 @@ def get_chemical_formula(dataset):
                 single_formula.append(str(dataset.at[i, col]))
         chemistry_formula.append("".join(single_formula))
     return chemistry_formula
+
+
+def evaluation_top_val_by_percentile(y_train_predict, y_predict):
+    y_train_predict = np.array(y_train_predict)
+    y_predict = np.array(y_predict)
+    y_predict_min = min(y_predict)
+    precision_value_list = []  # 大于某个阈值 y_predict的占比
+    predict_value_list = []
+    # y_train_predict >= y_predict_min
+    train_higher_min = y_train_predict[np.where(y_train_predict >= y_predict_min)]
+    array = np.array(list(train_higher_min)+list(y_predict))
+    print(array)
+    for percentile in [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]:
+        predict_value = stats.scoreatpercentile(array, percentile)
+        precision_value = np.sum(y_predict >= predict_value) / (np.sum(y_predict >= predict_value) + np.sum(
+            y_train_predict >= predict_value))
+        precision_value_list.append(precision_value)  # y axis
+        predict_value_list.append(percentile/100)  # x axis
+    print(predict_value_list)
+    print(precision_value_list)
+    top_validation_score = trapezoid(precision_value_list, predict_value_list)
+    return top_validation_score
+
 
 
 
