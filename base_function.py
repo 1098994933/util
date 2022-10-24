@@ -8,7 +8,6 @@ from sklearn.model_selection import KFold
 import random
 from scipy.integrate import trapezoid  # 梯形积分
 from scipy import stats
-import numpy as np
 
 def evaluate_model_plot(y_true, y_predict, show=False):
     """
@@ -213,15 +212,15 @@ def evaluation_top_val_by_percentile(y_train_predict, y_predict):
     # y_train_predict >= y_predict_min
     train_higher_min = y_train_predict[np.where(y_train_predict >= y_predict_min)]
     array = np.array(list(train_higher_min)+list(y_predict))
-    print(array)
+    # print(array)
     for percentile in [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]:
         predict_value = stats.scoreatpercentile(array, percentile)
         precision_value = np.sum(y_predict >= predict_value) / (np.sum(y_predict >= predict_value) + np.sum(
             y_train_predict >= predict_value))
         precision_value_list.append(precision_value)  # y axis
         predict_value_list.append(percentile/100)  # x axis
-    print(predict_value_list)
-    print(precision_value_list)
+    # print(predict_value_list)
+    # print(precision_value_list)
     top_validation_score = trapezoid(precision_value_list, predict_value_list)
     return top_validation_score
 
