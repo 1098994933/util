@@ -9,6 +9,7 @@ import random
 from scipy.integrate import trapezoid  # 梯形积分
 from scipy import stats
 
+
 def evaluate_model_plot(y_true, y_predict, show=False):
     """
     y_true:
@@ -37,7 +38,8 @@ def evaluate_model_plot(y_true, y_predict, show=False):
         plt.ylabel("Freq", fontsize=20)
         plt.show()
     from sklearn.metrics import mean_absolute_error
-
+    y_true = np.array(y_true)
+    y_predict = np.array(y_predict)
     n = len(y_true)
     MSE = mean_squared_error(y_true, y_predict)
     RMSE = pow(MSE, 0.5)
@@ -93,7 +95,6 @@ def top_train_test_split(df, y_col, test_ratio=0.2):
 
 
 def evaluation_top_val(y_train_predict, y_predict):
-
     # 预测值从[y_predict_min,max(y_train_predict,y_predict)] 分割 计算precision
     y_predict_min = min(y_predict)
     precision_value_list = []
@@ -166,7 +167,8 @@ def generate_alloys_random(search_range, residual_element, category_col=[], samp
     """
     search_range.pop(residual_element, None)
     rows = {}
-    elements_col = [col for col in search_range.keys() if len(search_range[col]) == 2 and len(col)<=2 and not col in category_col]
+    elements_col = [col for col in search_range.keys() if
+                    len(search_range[col]) == 2 and len(col) <= 2 and not col in category_col]
 
     df_result = pd.DataFrame()
     for i in range(samples):
@@ -203,7 +205,7 @@ def get_chemical_formula(dataset):
     return chemistry_formula
 
 
-def evaluation_top_val_by_percentile(y_train_predict, y_predict):
+def evaluation_top_val_by_percentile(y_train_predict, y_predict, percentiles=np.linspace(0, 100, 11), show=False):
     y_train_predict = np.array(y_train_predict)
     y_predict = np.array(y_predict)
     y_predict_min = min(y_predict)
@@ -211,19 +213,69 @@ def evaluation_top_val_by_percentile(y_train_predict, y_predict):
     predict_value_list = []
     # y_train_predict >= y_predict_min
     train_higher_min = y_train_predict[np.where(y_train_predict >= y_predict_min)]
-    array = np.array(list(train_higher_min)+list(y_predict))
+    array = np.array(list(train_higher_min) + list(y_predict))
     # print(array)
-    for percentile in [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]:
+    for percentile in percentiles:
         predict_value = stats.scoreatpercentile(array, percentile)
         precision_value = np.sum(y_predict >= predict_value) / (np.sum(y_predict >= predict_value) + np.sum(
             y_train_predict >= predict_value))
         precision_value_list.append(precision_value)  # y axis
-        predict_value_list.append(percentile/100)  # x axis
+        predict_value_list.append(percentile / 100)  # x axis
     # print(predict_value_list)
     # print(precision_value_list)
     top_validation_score = trapezoid(precision_value_list, predict_value_list)
+    if show:
+        plt.plot(predict_value_list, precision_value_list)
+        plt.xlabel("scaled(x)", fontsize=12, fontweight='bold')
+        plt.ylabel("score(x)", fontsize=12, fontweight='bold')
+        return top_validation_score, (predict_value_list, precision_value_list)
     return top_validation_score
 
 
+def stratifed_sample(df, Y_columns, groups, train_split_ratio, random_state=None):
+    """df:数据集
+    Y_columns：分层name
+    groups：拆分组数
+    train_split_ratio：训练集合百分比
+    """
+    df_train = pd.DataFrame()
+    ratio = train_split_ratio
+    groups_list = [f'G{i}' for i in range(1, groups + 1)]
+    df['groups'] = pd.qcut(df[Y_columns], groups, labels=groups_list, retbins=False, duplicates='raise')
+    for i in groups_list:
+        df_group = df[df.groups == i]  # 其中一个Grouop
+        count = len(df_group)
+        train_number = round(count * ratio)
+        df_train = df_train.append(df_group.sample(train_number, random_state=random_state))
+    # test index
+    df_test_index = list(set(df.index) - set(df_train.index))
+    # test_df
+    df_test = df[df.index.isin(df_test_index)]
+    return df_train, df_test
 
 
+# Faster than is_pareto_efficient_simple, but less readable.
+def is_pareto_efficient(costs, return_mask=True):
+    """
+    Find the pareto-efficient points
+    :param costs: An (n_points, n_costs) array
+    :param return_mask: True to return a mask
+    :return: An array of indices of pareto-efficient points.
+        If return_mask is True, this will be an (n_points, ) boolean array
+        Otherwise it will be a (n_efficient_points, ) integer array of indices.
+    """
+    is_efficient = np.arange(costs.shape[0])
+    n_points = costs.shape[0]
+    next_point_index = 0  # Next index in the is_efficient array to search for
+    while next_point_index < len(costs):
+        nondominated_point_mask = np.any(costs < costs[next_point_index], axis=1)
+        nondominated_point_mask[next_point_index] = True
+        is_efficient = is_efficient[nondominated_point_mask]  # Remove dominated points
+        costs = costs[nondominated_point_mask]
+        next_point_index = np.sum(nondominated_point_mask[:next_point_index]) + 1
+    if return_mask:
+        is_efficient_mask = np.zeros(n_points, dtype=bool)
+        is_efficient_mask[is_efficient] = True
+        return is_efficient_mask
+    else:
+        return is_efficient
