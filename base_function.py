@@ -147,7 +147,7 @@ def model_fit_evaluation(model, x_train, y_train, x_test, y_test, n_fold=5):
     return error_metric_testing
 
 
-def generate_alloys_random(search_range, residual_element, category_col=[], samples=10):
+def generate_alloys_random(search_range, residual_element, category_col=[], samples=10, random_state=0):
     """
     search_range including lower bound and up bound of weight
     example:     search_range = {"Ag": [0.1, 1],
@@ -165,24 +165,32 @@ def generate_alloys_random(search_range, residual_element, category_col=[], samp
             samples: the number
     :return: dataframe
     """
+    if not random_state is None:
+        np.random.seed(random_state)
     search_range.pop(residual_element, None)
     rows = {}
     elements_col = [col for col in search_range.keys() if
                     len(search_range[col]) == 2 and len(col) <= 2 and not col in category_col]
 
     df_result = pd.DataFrame()
-    for i in range(samples):
-        for col in search_range.keys():
-            if col in elements_col:  # elements features
-                rows[col] = [round(random.uniform(search_range[col][0], search_range[col][1]), 2)]
-            if col in category_col:  # category features
-                rows[col] = random.sample(search_range[col], 1)
+    for col in search_range.keys():
+        if col in elements_col:  # elements features
+            rows[col] = np.round(np.random.uniform(search_range[col][0], search_range[col][1], samples), 2)
+        if col in category_col:  # category features
+            rows[col] = np.random.choice(search_range[col], size=samples, replace=True)
+    #
+    # for i in range(samples):
+    #
+    #         if col in elements_col:  # elements features
+    #             rows[col] = [round(random.uniform(search_range[col][0], search_range[col][1]), 2)]
+    #         if col in category_col:  # category features
+    #             rows[col] = random.sample(search_range[col], 1)
 
-        result = pd.DataFrame(rows, columns=search_range.keys())
-        result[residual_element] = 100
-        for i in elements_col:
-            result[residual_element] = round(result[residual_element] - result[i], 2)
-        df_result = pd.concat([df_result, result])
+    result = pd.DataFrame(rows, columns=search_range.keys())
+    result[residual_element] = 100
+    for i in elements_col:
+        result[residual_element] = round(result[residual_element] - result[i], 2)
+    df_result = pd.concat([df_result, result])
     return df_result
 
 
