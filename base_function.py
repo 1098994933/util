@@ -191,6 +191,8 @@ def generate_alloys_random(search_range, residual_element, category_col=[], samp
     for i in elements_col:
         result[residual_element] = round(result[residual_element] - result[i], 2)
     df_result = pd.concat([df_result, result])
+    # delete invalid alloys
+    df_result = df_result[df_result[residual_element]>0]
     return df_result
 
 
@@ -236,6 +238,7 @@ def evaluation_top_val_by_percentile(y_train_predict, y_predict, percentiles=np.
         plt.plot(predict_value_list, precision_value_list)
         plt.xlabel("scaled(x)", fontsize=12, fontweight='bold')
         plt.ylabel("score(x)", fontsize=12, fontweight='bold')
+
         return top_validation_score, (predict_value_list, precision_value_list)
     return top_validation_score
 
