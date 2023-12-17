@@ -27,9 +27,6 @@ from sklearn.ensemble import ExtraTreesRegressor
 from sklearn.ensemble import AdaBoostRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 import re
-from util.evaluation import evaluate_model_plot
-from util.evaluation import top_train_test_split
-
 warnings.filterwarnings('ignore')
 pd.set_option('display.max_rows', 50)
 pd.set_option('display.max_columns', 500)

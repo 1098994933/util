@@ -8,7 +8,8 @@ from sklearn.model_selection import KFold
 import random
 from scipy.integrate import trapezoid  # 梯形积分
 from scipy import stats
-
+import os
+root_path = os.path.abspath(os.path.dirname(__file__))
 
 def evaluate_model_plot(y_true, y_predict, show=False):
     """
@@ -192,7 +193,7 @@ def generate_alloys_random(search_range, residual_element, category_col=[], samp
         result[residual_element] = round(result[residual_element] - result[i], 2)
     df_result = pd.concat([df_result, result])
     # delete invalid alloys
-    df_result = df_result[df_result[residual_element]>0]
+    df_result = df_result[df_result[residual_element] > 0]
     return df_result
 
 
@@ -200,7 +201,7 @@ def get_chemical_formula(dataset):
     """
     Al   Ni   Si
     0.5  0.5  0
-    :return: get_chemical_formula from element weigh dataframe Al0.5Ni0.5
+    :return: get_chemical_formula from element mol weigh dataframe Al0.5Ni0.5
     """
     elements_columns = dataset.columns
     dataset = dataset.reset_index()
@@ -209,8 +210,32 @@ def get_chemical_formula(dataset):
         single_formula = []
         for col in elements_columns:
             if (dataset.at[i, col]) > 0:
+                # element
                 single_formula.append(col)
+                # ratio
                 single_formula.append(str(dataset.at[i, col]))
+        chemistry_formula.append("".join(single_formula))
+    return chemistry_formula
+
+
+def get_chemical_formula_from_weight(dataset):
+    """
+    H   O   C
+    1  16  12
+    :return: get_chemical_formula from element mol dataframe H1O1C1
+    """
+    weight_dict = get_weight_dict()
+    elements_columns = dataset.columns
+    dataset = dataset.reset_index()
+    chemistry_formula = []
+    for i in range(dataset.shape[0]):
+        single_formula = []
+        for element in elements_columns:
+            if (dataset.at[i, element]) > 0:
+                # element
+                single_formula.append(element)
+                # ratio
+                single_formula.append(str(dataset.at[i, element] / weight_dict[element]))
         chemistry_formula.append("".join(single_formula))
     return chemistry_formula
 
@@ -290,3 +315,15 @@ def is_pareto_efficient(costs, return_mask=True):
         return is_efficient_mask
     else:
         return is_efficient
+
+
+def get_weight_dict():
+    """ :return {'H': 1.00794, 'He': 4.002602, 'Li': 6.941}"""
+    col = "MagpieData mean AtomicWeight"
+    df = pd.read_excel(root_path + "/project_data/elements.xlsx", index_col="formula")
+    return df[col].to_dict()
+
+
+if __name__ == '__main__':
+    """ test """
+    pass
