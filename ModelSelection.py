@@ -10,7 +10,7 @@ from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import GridSearchCV
 
 
-def find_best_regression_model(X_train, Y_train, cv=5):
+def find_best_regression_model(X_train, Y_train, cv=10):
     """
     使用交叉验证评估不同回归模型并返回最优模型。
 
@@ -24,9 +24,7 @@ def find_best_regression_model(X_train, Y_train, cv=5):
     """
 
     models = [
-        LinearRegression(),
-        KNeighborsRegressor(),
-        DecisionTreeRegressor(),
+        # DecisionTreeRegressor(),
         RandomForestRegressor(),
         GradientBoostingRegressor(),
         Ridge(),
@@ -37,8 +35,8 @@ def find_best_regression_model(X_train, Y_train, cv=5):
         "LinearRegression": {},
         "KNeighborsRegressor": {"n_neighbors": [3, 5, 7]},
         "DecisionTreeRegressor": {"max_depth": [None, 1, 3, 5]},
-        "RandomForestRegressor": {"n_estimators": [50, 100, 200]},
-        "GradientBoostingRegressor": {"n_estimators": [50, 100, 200], "learning_rate": [0.5, 0.1, 0.05, 0.01]},
+        "RandomForestRegressor": {"n_estimators": [50, 100, 200, 500]},
+        "GradientBoostingRegressor": {"n_estimators": [50, 100, 200, 500], "learning_rate": [0.5, 0.1, 0.05, 0.01]},
         "Ridge": {"alpha": [0.1, 1.0, 10.0]},
         "SVR": {"C": [0.1, 1.0, 10.0, 100], "kernel": ["linear", "rbf"]}
     }
@@ -49,7 +47,7 @@ def find_best_regression_model(X_train, Y_train, cv=5):
     for model in models:
         model_name = type(model).__name__
         param_grid_model = param_grid[model_name]
-        grid_search = GridSearchCV(model, param_grid_model, cv=cv, scoring='neg_mean_squared_error')
+        grid_search = GridSearchCV(model, param_grid_model, cv=cv, scoring='neg_mean_absolute_error')
         grid_search.fit(X_train, Y_train)
         mean_score = -np.mean(grid_search.cv_results_['mean_test_score'])
 

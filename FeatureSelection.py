@@ -59,7 +59,6 @@ def select_features_by_pcc(x, y, pcc):
             # print(pcc1, pcc2)
             drop_feature = corr.index[row1].tolist()[0]
 
-        print(drop_feature)
         x = x.drop(drop_feature, axis=1)
         corr = abs(x.corr())
         feature_num = x.shape[1]
@@ -169,3 +168,26 @@ def select_features_by_ga(x, y, task="cls"):
 
     best_chromosome, best_score = genetic_feature_selection(x, y)
     return best_chromosome, best_score
+
+
+def select_features_by_rfe(model, x, y, features=None, step=None, cv=10):
+    import numpy as np
+    import pandas as pd
+    from sklearn.feature_selection import RFECV
+    if step is None:
+        step = round(0.05 * x.shape[1])
+    if features is None:
+        features = np.array([i for i in range(x.shape[1])])
+    if isinstance(x, pd.DataFrame):
+        features = np.array(x.columns)
+    feat_selector = RFECV(estimator=model,  # 学习器
+              step=step,  # 移除特征个数
+              cv=cv,  # 交叉验证次数
+              scoring='r2',  # 学习器的评价标准
+              verbose=1,
+              n_jobs=1
+              ).fit(x, y)
+    rfe_rank_list = feat_selector.ranking_
+    selected_features = np.array([features[i] for i in range(len(rfe_rank_list)) if (rfe_rank_list[i] == 1)])
+    feat_selector.selected_features = selected_features
+    return feat_selector

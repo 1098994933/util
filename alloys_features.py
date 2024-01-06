@@ -25,6 +25,22 @@ def find_elements(string):
     return element_dict
 
 
+def formula_to_features(formula_list):
+    """
+    :param dataset:
+    :return:
+    """
+    features = []
+    for formula in formula_list:
+        elements = find_elements(formula)
+        ci = np.array(list(elements.values())) / np.sum(np.array(list(elements.values())))
+        ei = np.array(list(elements.keys()))
+        af = AlloyFeature(ci, ei)
+        features.append(af.get_features())
+    df = pd.DataFrame(features, columns=af.feature_names)
+    return df
+
+
 class AlloyFeature(object):
     def __init__(self, ci, ei):
         self.ele_data = element_data
@@ -43,11 +59,18 @@ class AlloyFeature(object):
                               "Entropy of mixing",
                               "Mixing enthalpy",
                               "Solid solution phase forming ability",
-                              "Phase formation coefficient", "VEC",
-                              "Energy term", "Local size mismatch in n-element alloys",
+                              "Phase formation coefficient",
+                              "VEC",
+                              "Energy term",
+                              "Local size mismatch in n-element alloys",
                               "Local modulus mismatch",
                               "Peierls-Nabarro stress coefficient",
-                              "Work function"
+                              "Work function",
+                              "Local atomic distortion from one single atom",
+                              "Local atomic distortion from a group of adjacent atoms",
+                              "Pauling electronegativity",
+                              "Allen electronegativity",
+                              "Number of mobile electrons",
                               ]
 
         # self.feature_values = [self.delat_r, self.gama]
@@ -66,6 +89,11 @@ class AlloyFeature(object):
         self.get_dr()
         self.get_f()
         self.get_work_function()
+        self.get_local_atomic_distortion()
+        self.get_local_atomic_distortion2()
+        self.get_pauling_electronegativity()
+        self.get_allen_electronegativity()
+        self.get_ed()
         return [self.delat_r, self.gama,
                 self.ec, self.g,
                 self.u, self.delat_g,
@@ -73,7 +101,8 @@ class AlloyFeature(object):
                 self.get_mixing_enthalpy(),
                 self.fai, self.pfc,
                 self.vec, self.energy_term,
-                self.dr, self.dg, self.f, self.w]
+                self.dr, self.dg, self.f, self.w,
+                self.alpha1, self.alpha2, self.pe, self.ae, self.ed]
 
     def get_delat_r(self):
         self.delat_r = np.sum(self.ci * (1 - self.ri / self.r_hat) ** 2) ** 0.5
@@ -136,8 +165,15 @@ class AlloyFeature(object):
         combins = [c for c in combinations(list(range(len(self.ci))), 2)]
         self.mixing_enthalpy = 0
         for (i, j) in combins:
-            # print(self.ci[i], self.ci[j], self.ri[i], self.ri[j])
-            self.mixing_enthalpy = 4 * self.ci[i] * self.ci[j] * self.ele_data.loc[self.ei[i], self.ei[j]]
+            if self.ei[i] != self.ei[j]:
+                try:
+                    mix = self.ele_data.loc[self.ei[i], self.ei[j]]
+                except:
+                    try:
+                        mix = self.ele_data.loc[self.ei[j], self.ei[i]]
+                    except:
+                        mix = 0
+                self.mixing_enthalpy = self.mixing_enthalpy + 4 * self.ci[i] * self.ci[j] * mix
         return self.mixing_enthalpy
 
     def get_phase_formation_coefficient(self):
@@ -175,31 +211,59 @@ class AlloyFeature(object):
     def get_fai(self):
         # Solid solution phase forming ability
         if self.mixing_enthalpy != 0:
-            self.fai = self.tm * self.entropy_of_mixing / abs(self.mixing_enthalpy)
+            # the units of mixing_enthalpy is kJ and entropy_of_mixing is J
+            self.fai = self.tm * self.entropy_of_mixing / abs(self.mixing_enthalpy) / 1000
         else:
             self.fai = 0
         # Phase formation coefficient
         self.pfc = self.entropy_of_mixing / (self.delat_r ** 2)
+
+    def get_local_atomic_distortion(self):
+        """
+        from one single atom alone
+        """
+        self.alpha1 = np.sum(self.ci * abs(self.ri - self.r_hat) / self.r_hat)
+        return self.alpha1
+
+    def get_local_atomic_distortion2(self):
+        combins = [c for c in combinations(list(range(len(self.ci))), 2)]
+        self.alpha2 = 0
+        for (i, j) in combins:
+            self.alpha2 = self.dg + self.ci[i] * self.ci[j] * abs(self.ri[i] + self.ri[j] - 2 * self.r_hat) / (
+                    2 * self.r_hat)
+        return self.alpha2
+
+    def get_pauling_electronegativity(self):
+        """Pauling electronegativity"""
+        self.pei = np.array([self.ele_data.loc[e, "Electronegativity Pauling"] for e in self.ei])
+        self.pe_hat = np.sum(self.ci * self.pei)
+        self.pe = (np.sum(self.ci * (self.pei - self.pe_hat) ** 2)) ** 0.5
+        return self.pe
+
+    def get_allen_electronegativity(self):
+        self.aei = np.array([self.ele_data.loc[e, "Electronegativity Allred"] for e in self.ei])
+        self.ae_hat = np.sum(self.ci * self.aei)
+        self.ae = np.sum(self.ci * abs(1 - self.aei / self.ae_hat) ** 2)
+        return self.ae
+
+    def get_ed(self):
+        """ Elemental electron density"""
+        self.edi = np.array([self.ele_data.loc[e, "Elemental electron density"] for e in self.ei])
+        self.ed = np.sum(self.ci * self.edi)
+        return self.ed
 
 
 if __name__ == '__main__':
     ci = np.array([0.5, 0.4, 0.1])
     ei = ["Al", "Cu", 'Zn']
     af = AlloyFeature(ci, ei)
-    print(af.ele_data)
-    print(af.get_delat_r())
-    print(af.get_features())
     dataset = pd.read_csv("../data/formula.csv")
-    print(dataset)
     s = dataset['formula'][1]
     input_string = s
     elements = find_elements(input_string)
-    print(elements)
     ci = np.array(list(elements.values())) / np.sum(np.array(list(elements.values())))
     ei = np.array(list(elements.keys()))
-
     af = AlloyFeature(ci, ei)
-    print(af.get_features())
 
     features = []
     for formula in dataset['formula']:
@@ -211,6 +275,12 @@ if __name__ == '__main__':
     df = pd.DataFrame(features, columns=af.feature_names)
     print(df)
     df.to_csv("alloy_features.csv", index=False)
-    # print(re.split("[A-Za-z]+.*?", s))
-    # print(re.split("\w+", s))
-    # ri = for i in af.ele_data
+
+    dataset = pd.read_csv("../data/formula.csv")
+    df1 = formula_to_features(dataset['formula'])
+    df1.to_csv("../data/alloy_features.csv", index=False)
+
+    dataset2 = pd.read_csv("../data/formula_design.csv")
+    df2 = formula_to_features(dataset2['formula'])
+    f_name = "alloy"
+    df2.to_csv(f"../data/formula_design_{f_name}_features.csv", index=False)
