@@ -151,7 +151,7 @@ class AlloyFeature(object):
 
     def get_tm(self):
         """Tm"""
-        self.tmi = np.array([self.ele_data.loc[e, "Cohesive_Energy(kJ/mol)"] for e in self.ei])
+        self.tmi = np.array([self.ele_data.loc[e, "Elemental melting temperature"] for e in self.ei])
         self.tm = np.sum(self.ci * self.tmi)
         return self.tm
 
