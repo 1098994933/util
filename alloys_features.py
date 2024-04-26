@@ -1,3 +1,6 @@
+"""
+knowledge-aware feature calculation
+"""
 import os
 import pandas as pd
 import numpy as np
@@ -12,7 +15,7 @@ element_data = pd.read_excel(os.path.join(project_dataset_path, "element_data.xl
 
 def find_elements(string):
     """
-    split formula to element and its ratio
+    parse formula to element and its ratio as dict
     """
     pattern = r'([A-Z][a-z]?)(\d\.*\d*)'
     elements = re.findall(pattern, string)
@@ -33,6 +36,7 @@ def formula_to_features(formula_list):
     features = []
     for formula in formula_list:
         elements = find_elements(formula)
+        # calculate ci and ei
         ci = np.array(list(elements.values())) / np.sum(np.array(list(elements.values())))
         ei = np.array(list(elements.keys()))
         af = AlloyFeature(ci, ei)
@@ -72,9 +76,6 @@ class AlloyFeature(object):
                               "Allen electronegativity",
                               "Number of mobile electrons",
                               ]
-
-        # self.feature_values = [self.delat_r, self.gama]
-
     def get_features(self):
         self.get_delat_r()
         self.get_gama()
@@ -189,7 +190,6 @@ class AlloyFeature(object):
         combins = [c for c in combinations(list(range(len(self.ci))), 2)]
         self.dr = 0
         for (i, j) in combins:
-            # (self.ci[i], self.ci[j], self.ri[i], self.ri[j])
             self.dr = self.dr + self.ci[i] * self.ci[j] * abs(self.ri[i] - self.ri[j])
         # Local modulus mismatch
         combins = [c for c in combinations(list(range(len(self.ci))), 2)]
@@ -197,7 +197,6 @@ class AlloyFeature(object):
         for (i, j) in combins:
             self.dg = self.dg + self.ci[i] * self.ci[j] * abs(self.gi[i] - self.gi[j])
         return self.dr
-        # print(combins)
 
     def get_energy_term(self):
         """Energy term"""
@@ -205,7 +204,9 @@ class AlloyFeature(object):
         return self.energy_term
 
     def get_f(self):
-        # Peierls-Nabarro stress coefficient
+        """
+        Peierls-Nabarro stress coefficient
+        """
         self.f = 2 * self.g / (1 - self.u)
 
     def get_fai(self):
@@ -254,9 +255,11 @@ class AlloyFeature(object):
 
 
 if __name__ == '__main__':
+    # test case 1
     ci = np.array([0.5, 0.4, 0.1])
     ei = ["Al", "Cu", 'Zn']
     af = AlloyFeature(ci, ei)
+    # test case 2
     dataset = pd.read_csv("../data/formula.csv")
     s = dataset['formula'][1]
     input_string = s
@@ -265,22 +268,13 @@ if __name__ == '__main__':
     ei = np.array(list(elements.keys()))
     af = AlloyFeature(ci, ei)
 
-    features = []
-    for formula in dataset['formula']:
-        elements = find_elements(formula)
-        ci = np.array(list(elements.values())) / np.sum(np.array(list(elements.values())))
-        ei = np.array(list(elements.keys()))
-        af = AlloyFeature(ci, ei)
-        features.append(af.get_features())
-    df = pd.DataFrame(features, columns=af.feature_names)
-    print(df)
-    df.to_csv("alloy_features.csv", index=False)
-
+    # knowledge-aware feature calculation for training dataset
     dataset = pd.read_csv("../data/formula.csv")
     df1 = formula_to_features(dataset['formula'])
     df1.to_csv("../data/alloy_features.csv", index=False)
 
-    dataset2 = pd.read_csv("../data/formula_design.csv")
-    df2 = formula_to_features(dataset2['formula'])
+    # designed alloys knowledge-aware feature calculation
+    designed_dataset = pd.read_csv("../data/formula_design.csv")
+    designed_feature = formula_to_features(designed_dataset['formula'])
     f_name = "alloy"
-    df2.to_csv(f"../data/formula_design_{f_name}_features.csv", index=False)
+    designed_feature.to_csv(f"../data/formula_design_{f_name}_features.csv", index=False)

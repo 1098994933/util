@@ -96,8 +96,6 @@ def fcv(original_model, X, y, minimum_ratio=0.1, maximum_ratio=0.95, reverse=Fal
             continue
         if split > maxmum_sample_number:
             break
-
-        #         print("Training 0 to {}, validation on {} to {}".format(split, split, split + fold_sample_number))
         sys.stdout.write("Training end in %s out of %s \r" % (split, sample_number))
         sys.stdout.flush()
         X_train = X[0:split]
@@ -118,11 +116,6 @@ def fcv(original_model, X, y, minimum_ratio=0.1, maximum_ratio=0.95, reverse=Fal
             model.fit(X_train, y_train)
         else:
             pass
-            # if not hybrid:
-            #     model = original_model(shape)
-            #     model.fit(X_train, y_train, epochs=epochs, batch_size=128, verbose=0)
-            # else:
-            #     model = hybrid_train(original_model, X_train, y_train, shape)
         y_pred = model.predict(X_val)
 
         label.extend(list(y_val))
@@ -135,8 +128,6 @@ def fcv(original_model, X, y, minimum_ratio=0.1, maximum_ratio=0.95, reverse=Fal
             details['y_tests'].append(y_val)
             details['y_test_predicts'].append(y_pred)
 
-        # if not issubclass(type(original_model), BaseEstimator):
-        #     K.clear_session()
     if details:
         return label, prediction, details
     else:
@@ -240,11 +231,6 @@ def forward_holdout(original_model, X, y, test_ratio, reverse=False):
         model.fit(X_train, y_train)
     else:
         pass
-        # if not hybrid:
-        #     model = original_model(shape)
-        #     model.fit(X_train, y_train, epochs=epochs, batch_size=128, verbose=0)
-        # else:
-        #     model = hybrid_train(original_model, X_train, y_train, shape)
     y_pred = model.predict(X_val)
     return y_val, y_pred, X_train, y_train
 

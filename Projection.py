@@ -23,9 +23,9 @@ def pca_2d_projection(X, Y):
 
     # Create a scatter plot of the two principal components
     fig = plt.figure(figsize=(8, 6), dpi=300)
-    scatter = plt.scatter(X_pca[:, 0], X_pca[:, 1], c=Y, cmap='viridis', label="Train", alpha=0.6)
+    scatter = plt.scatter(X_pca[:, 0], X_pca[:, 1], c=Y, cmap='jet', label="Train", alpha=0.6)
     plt.colorbar(scatter)
-    plt.xlabel('Principal Component 1')
-    plt.ylabel('Principal Component 2')
+    plt.xlabel('Principal Component 1', fontsize=12)
+    plt.ylabel('Principal Component 2', fontsize=12)
     plt.grid(True)
     return fig, pca
