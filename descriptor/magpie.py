@@ -2,6 +2,12 @@ import pandas as pd
 
 
 def get_magpie_features(file_name="train_formula.csv", data_path="/content/"):
+    """
+    将含有化学式的csv文件，计算其magpie features
+    :param file_name:
+    :param data_path:
+    :return:
+    """
     from matminer.featurizers.conversions import StrToComposition
     from matminer.featurizers.base import MultipleFeaturizer
     from matminer.featurizers import composition as cf
@@ -12,4 +18,4 @@ def get_magpie_features(file_name="train_formula.csv", data_path="/content/"):
                                               cf.ValenceOrbital(props=['avg']), cf.IonProperty(fast=True)])
     feature_labels = feature_calculators.feature_labels()
     df_magpie = feature_calculators.featurize_dataframe(df_magpie, col_id='composition_obj');
-    df_magpie.to_csv(data_path + f'{file_name}_magpie_features.csv', index=False)
+    return df_magpie
