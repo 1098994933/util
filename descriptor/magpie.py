@@ -1,7 +1,7 @@
 import pandas as pd
 
 
-def get_magpie_features(file_name="train_formula.csv", data_path="/content/"):
+def get_magpie_features(file_name="train_formula.csv", data_path="/content/") -> pd.DataFrame:
     """
     将含有化学式的csv文件，计算其magpie features
     :param file_name:
@@ -17,5 +17,5 @@ def get_magpie_features(file_name="train_formula.csv", data_path="/content/"):
     feature_calculators = MultipleFeaturizer([cf.Stoichiometry(), cf.ElementProperty.from_preset("magpie"),
                                               cf.ValenceOrbital(props=['avg']), cf.IonProperty(fast=True)])
     feature_labels = feature_calculators.feature_labels()
-    df_magpie = feature_calculators.featurize_dataframe(df_magpie, col_id='composition_obj');
+    df_magpie = feature_calculators.featurize_dataframe(df_magpie, col_id='composition_obj')
     return df_magpie

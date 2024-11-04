@@ -216,7 +216,7 @@ class AlloyFeature(object):
         else:
             self.fai = 0
         # Phase formation coefficient
-        self.pfc = self.entropy_of_mixing / (self.delat_r ** 2)
+        self.pfc = self.entropy_of_mixing / (max(self.delat_r ** 2, 0.0001))
 
     def get_local_atomic_distortion(self):
         """
@@ -255,25 +255,26 @@ class AlloyFeature(object):
 
 if __name__ == '__main__':
     # test case 1
-    ci = np.array([0.5, 0.4, 0.1])
-    ei = ["Al", "Cu", 'Zn']
-    af = AlloyFeature(ci, ei)
-    # test case 2
-    dataset = pd.read_csv("../data/formula.csv")
-    s = dataset['formula'][1]
-    input_string = s
-    elements = find_elements(input_string)
-    ci = np.array(list(elements.values())) / np.sum(np.array(list(elements.values())))
-    ei = np.array(list(elements.keys()))
-    af = AlloyFeature(ci, ei)
+    # ci = np.array([0.5, 0.4, 0.1])
+    # ei = ["Al", "Cu", 'Zn']
+    # af = AlloyFeature(ci, ei)
+    # # test case 2
+    # dataset = pd.read_csv("../data/formula.csv")
+    # s = dataset['formula'][1]
+    # input_string = s
+    # elements = find_elements(input_string)
+    # ci = np.array(list(elements.values())) / np.sum(np.array(list(elements.values())))
+    # ei = np.array(list(elements.keys()))
+    # af = AlloyFeature(ci, ei)
 
     # knowledge-aware feature calculation for training dataset
     dataset = pd.read_csv("../data/formula.csv")
     df1 = formula_to_features(dataset['formula'])
+    print(df1)
     df1.to_csv("../data/alloy_features.csv", index=False)
 
     # designed alloys knowledge-aware feature calculation
-    designed_dataset = pd.read_csv("../data/formula_design.csv")
-    designed_feature = formula_to_features(designed_dataset['formula'])
-    f_name = "alloy"
-    designed_feature.to_csv(f"../data/formula_design_{f_name}_features.csv", index=False)
+    # designed_dataset = pd.read_csv("../data/formula_design.csv")
+    # designed_feature = formula_to_features(designed_dataset['formula'])
+    # f_name = "alloy"
+    # designed_feature.to_csv(f"../data/formula_design_{f_name}_features.csv", index=False)
