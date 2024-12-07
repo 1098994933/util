@@ -9,8 +9,12 @@ import torch.optim as optim
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 import os
+from sklearn.preprocessing import MinMaxScaler
 
 class VAEModel(nn.Module):
+    """
+    VAE DNN model
+    """
     def __init__(self, input_dim, latent_dim):
         super(VAEModel, self).__init__()
         self.input_dim = input_dim
@@ -39,6 +43,9 @@ class VAEModel(nn.Module):
         h = self.encoder(x)
         mu, logvar = torch.chunk(h, 2, dim=1)
         return mu, logvar
+    def get_embedding(self, x):
+        h = self.encoder(x)
+        return h
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
@@ -53,12 +60,12 @@ class VAEModel(nn.Module):
         z = self.reparameterize(mu, logvar)
         return self.decode(z), mu, logvar
 
+
 class OneDimensionalDataset(Dataset):
     def __init__(self, data):
         self.data = data
-        self.min_val = torch.min(self.data)
-        self.max_val = torch.max(self.data)
-        self.data_normalized = (self.data - self.min_val) / (self.max_val - self.min_val)
+        self.scaler = MinMaxScaler()
+        self.data_normalized = torch.Tensor(self.scaler.fit_transform(self.data))
 
     def __len__(self):
         return len(self.data)
@@ -66,12 +73,13 @@ class OneDimensionalDataset(Dataset):
     def __getitem__(self, index):
         return self.data_normalized[index]
 
-class VAETrainer:
+
+class VAETrainer(object):
     """
     自动划分20% 数据 作为验证集
     """
-    def __init__(self, data, input_dim, latent_dim, batch_size=128, learning_rate=0.0001):
-        self.data = data
+    def __init__(self, data, input_dim: int, latent_dim: int, batch_size: int = 128, learning_rate=0.0001):
+        self.data = data  # torch.
         self.input_dim = input_dim
         self.latent_dim = latent_dim
         self.batch_size = batch_size
@@ -82,7 +90,10 @@ class VAETrainer:
         train_size = int(0.8 * n)
         val_size = n - train_size
         self.train_data, self.val_data = torch.utils.data.random_split(data, [train_size, val_size])
-
+        print("dataset size:", n)
+        print("val dataset size:", val_size)
+        print("train dataset size:", train_size)
+        print("val dataset size:", val_size)
         self.model = VAEModel(input_dim, latent_dim)
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
 
@@ -136,14 +147,89 @@ class VAETrainer:
                 print(f'Early stopping at epoch {epoch + 1}')
                 break
 
-    def generate_samples(self, num_samples):
+
+    def generate_samples(self, num_samples: int):
+        """
+        generate samples by VAE model
+        :param num_samples:
+        :return:
+        """
         self.model.eval()
-        with torch.no_grad():
+        with (torch.no_grad()):
             z = torch.randn(num_samples, self.latent_dim)
             samples = self.model.decode(z)
-            # 逆标准化
-            samples_denormalized = samples * (self.data.max_val - self.data.min_val) + self.data.min_val
-        return samples_denormalized.numpy()
+            # 逆标准化 by dataset scaler
+            samples_denormalized = self.data.scaler.inverse_transform(samples)
+        return samples_denormalized
+
+    def encode(self, x):
+        """
+        get hidden embedding
+        :param x:
+        :return:
+        """
+        self.model.eval()
+        with torch.no_grad():
+            h = self.model.get_embedding(x)
+        return h
+
+    def reconstruct(self, x: torch.Tensor):
+        """
+        get reconstructed data
+        :param x:
+        :return:
+        """
+        self.model.eval()
+        with torch.no_grad():
+            mu, logvar = self.model.encode(x)
+            z = self.model.reparameterize(mu, logvar)
+            recon_x = self.model.decode(z)
+        return recon_x
+    def merge_val_data_and_reconstruct(self):
+        self.model.eval()
+        val_loader = DataLoader(self.val_data, batch_size=self.batch_size)
+
+        # 存储原始验证集和重建数据
+        val_data_list = []
+        recon_data_list = []
+
+        with torch.no_grad():
+            for batch in val_loader:
+                recon_batch = self.reconstruct(batch)
+                # 逆标准化 by dataset scaler
+                recon_data_denormalized = self.data.scaler.inverse_transform(recon_batch.cpu().numpy())
+                val_data_denormalized = self.data.scaler.inverse_transform(batch.cpu().numpy())
+
+                val_data_list.append(val_data_denormalized)
+                recon_data_list.append(recon_data_denormalized)
+
+        # 合并所有批次的数据
+        val_data_combined = np.concatenate(val_data_list, axis=0)
+        recon_data_combined = np.concatenate(recon_data_list, axis=0)
+
+        # 创建 DataFrame
+        val_df = pd.DataFrame(val_data_combined, columns=[f"Feature_{i+1}" for i in range(self.input_dim)])
+        recon_df = pd.DataFrame(recon_data_combined, columns=[f"Reconstructed_Feature_{i+1}" for i in range(self.input_dim)])
+
+        # 合并原始验证集和重建数据的 DataFrame
+        merged_df = pd.concat([val_df, recon_df], axis=1)
+        return merged_df
+def train_VAE_with_dataset(dataset: pd.DataFrame,latent_dim:int=10, epochs:int=200):
+    """
+
+    :param dataset:
+    :return:
+    """
+    data = torch.Tensor(dataset.values)
+    input_dim = dataset.shape[1]
+    # 创建 VAE 训练器实例
+    dataset = OneDimensionalDataset(data)
+    vae_trainer = VAETrainer(dataset, input_dim=input_dim, latent_dim=latent_dim)
+    # 训练模型
+    vae_trainer.train(epochs=epochs)
+    return vae_trainer
+
+
 
 if __name__ == '__main__':
     # 模拟一维向量数据
@@ -170,7 +256,7 @@ if __name__ == '__main__':
     if gen:
         generated_samples = vae_trainer.generate_samples(num_samples=100)
         print(generated_samples)
-        df_gen = pd.DataFrame(generated_samples,columns=df_element.columns)
+        df_gen = pd.DataFrame(generated_samples, columns=df_element.columns)
         df_gen["N_alloy"] = -1 * df_gen["N_alloy"].round().astype(int)
         print(df_gen)
         for index, row in df_gen.iterrows():
