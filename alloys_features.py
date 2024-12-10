@@ -16,7 +16,7 @@ def find_elements(string):
     """
     parse formula to element and its ratio as dict
     """
-    pattern = r'([A-Z][a-z]?)(\d\.*\d*)'
+    pattern = r'([A-Z][a-z]?)(\d*\.*\d*)'
     elements = re.findall(pattern, string)
 
     element_dict = {}
