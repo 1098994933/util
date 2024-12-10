@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from scipy.spatial.distance import cdist
 
-class PCAVisualizer(object):
+class PCAProjection(object):
     def __init__(self, n_components=2, n_clusters=3):
         self.n_components = n_components
         self.scaler = StandardScaler()
