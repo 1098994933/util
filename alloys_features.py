@@ -254,6 +254,11 @@ class AlloyFeature(object):
 
 
 if __name__ == '__main__':
+
+    d = find_elements("ZrCu")
+    print(d)
+    d = find_elements("AlCrFeNiMo0.5")
+    print(d)
     # test case 1
     # ci = np.array([0.5, 0.4, 0.1])
     # ei = ["Al", "Cu", 'Zn']
