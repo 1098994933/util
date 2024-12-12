@@ -3,6 +3,9 @@ functions of plot figures
 """
 
 import matplotlib.pyplot as plt
+from matplotlib.pylab import mpl
+mpl.rcParams['font.sans-serif'] = ['SimHei']  # 显示中文
+mpl.rcParams['axes.unicode_minus'] = False  # 显示负号
 
 
 def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predict=None,
