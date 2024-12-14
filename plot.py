@@ -93,3 +93,58 @@ def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predic
 
     # Show plot
     plt.show()
+
+import shap
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+def generate_shap_figures(model, X, fig_path='./figures/shap.png', n_features=5):
+    """
+    Generate SHAP summary and dependence plots, and save them to files.
+
+    Parameters:
+        model: Trained tree-based model or compatible model with a predict function.
+        X (pd.DataFrame): Input data for SHAP analysis.
+        fig_path (str): Base path to save SHAP figures.
+        n_features (int): Number of top features to include in dependence plots.
+
+    Returns:
+        list: Top `n_features` feature names.
+    """
+    # Limit the number of features to the number of columns in X
+    n_features = min(X.shape[1], n_features)
+
+    # Determine the appropriate SHAP explainer
+    if type(model).__name__ in ["GradientBoostingRegressor", "RandomForestRegressor"]:
+        explainer = shap.TreeExplainer(model, feature_perturbation="tree_path_dependent")
+    else:
+        explainer = shap.KernelExplainer(model.predict, X, keep_index=True)
+
+    # Compute SHAP values
+    shap_values = explainer.shap_values(X)
+
+    # Generate and save summary plot
+    plt.figure(dpi=300)
+    shap.summary_plot(shap_values, X, show=False, color_bar=True)
+    plt.xlabel("SHAP value of model", fontweight='bold', fontsize=14)
+    plt.tick_params(labelsize=12)
+    plt.savefig(fig_path, bbox_inches='tight')
+    plt.close()
+
+    # Compute feature importance and select top features
+    feature_importance = np.abs(shap_values).mean(axis=0)
+    top_features_indices = np.argsort(feature_importance)[-n_features:]
+    top_features_names = X.columns[top_features_indices]
+
+    # Generate and save dependence plots for top features
+    for feature_name in top_features_names:
+        plt.figure(dpi=300)
+        shap.dependence_plot(feature_name, shap_values, X, show=False)
+        plt.savefig(f"{fig_path}_{feature_name}.png", bbox_inches='tight')
+        plt.close()
+
+    # Close all remaining plots to release resources
+    plt.close('all')
+
+    return top_features_names
