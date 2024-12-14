@@ -105,11 +105,18 @@ class PCAProjection(object):
 
         # 使用seaborn的scatterplot进行可视化
         plt.figure(figsize=(8, 6))
-        sns.scatterplot(data=pca_df, x='PC1', y='PC2', hue='Label', style='Label', palette='Set2')
+        if pd.api.types.is_numeric_dtype(Y) and len(np.unique(Y)) > 7:  # 判断为连续变量:
+            scatter = sns.scatterplot(data=pca_df, x='PC1', y='PC2', hue='Label', palette='coolwarm', legend=False)
+            norm = plt.Normalize(pca_df['Label'].min(), pca_df['Label'].max())
+            sm = plt.cm.ScalarMappable(cmap='coolwarm', norm=norm)
+            sm.set_array([])
+            plt.colorbar(sm, label='Y')
+        else:  # 判断为分类变量
+            sns.scatterplot(data=pca_df, x='PC1', y='PC2', hue='Label', style='Label', palette='Set2')
+            plt.legend(title='Label')
         plt.title('PCA Visualization')
         plt.xlabel('Principal Component 1')
         plt.ylabel('Principal Component 2')
-        plt.legend(title='Label')
 
         # 保存或显示图像
         if save:
