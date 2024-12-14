@@ -10,7 +10,7 @@ mpl.rcParams['axes.unicode_minus'] = False  # 显示负号
 
 def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predict=None,
                             x_label="Measured", y_label="Predicted", title=None,
-                            figure_size=(7, 5), font='Arial', alpha_test=0.4, alpha_train=0.4,
+                            figure_size=(7, 5), alpha_test=0.4, alpha_train=0.4,
                             legend_loc='best', grid_style="--", save_path=None,
                             plot_test_index=False, evaluation_matrix=None):
     """
@@ -45,8 +45,6 @@ def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predic
 
     # Plot setup
     plt.figure(figsize=figure_size)
-    plt.rcParams['font.sans-serif'] = [font]
-    plt.rcParams['axes.unicode_minus'] = False
     plt.grid(linestyle=grid_style)
     # Scatter plots
     plt.scatter(Y_test, y_test_predict, color='red', alpha=alpha_test, label='Test')
@@ -64,9 +62,6 @@ def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predic
     plt.xlim(lim_min, lim_max)
     plt.ylim(lim_min, lim_max)
 
-    # Add legend
-    if Y_train is not None and y_train_predict is not None:
-        plt.legend(loc=legend_loc)
     ax = plt.gca()
     # Add evaluation metrics as text on the plot
     if evaluation_matrix:
@@ -80,11 +75,13 @@ def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predic
             text_lines.append(f"$MAE={mae:.3f}$")
         if r is not None:
             text_lines.append(f"$R={r:.3f}$")
-        plt.text(0.05, 0.75, '\n'.join(text_lines), transform=ax.transAxes, fontsize=10, bbox=dict(facecolor='white', alpha=0.6))
+        plt.text(0.05, 0.80, '\n'.join(text_lines), transform=ax.transAxes, fontsize=10, bbox=dict(facecolor='white', alpha=0.6))
     # Add optional title
     if title:
         plt.title(title, fontsize=14, fontweight='bold')
-
+    # Add legend
+    if Y_train is not None and y_train_predict is not None:
+        plt.legend(loc=legend_loc)
     # Save the plot if a path is provided
     if save_path:
         plt.savefig(save_path, bbox_inches='tight')
