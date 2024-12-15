@@ -3,7 +3,7 @@ service for feature selection
 """
 import numpy as np
 import pandas as pd
-from sklearn.feature_selection import mutual_info_regression
+from sklearn.feature_selection import mutual_info_regression, VarianceThreshold
 from scipy.stats import pearsonr
 
 
@@ -191,3 +191,10 @@ def select_features_by_rfe(model, x, y, features=None, step=None, cv=10):
     selected_features = np.array([features[i] for i in range(len(rfe_rank_list)) if (rfe_rank_list[i] == 1)])
     feat_selector.selected_features = selected_features
     return feat_selector
+
+def variance_threshold_selector(data, threshold=0):
+    selector = VarianceThreshold(threshold)
+    selector.fit(data)
+    support = selector.get_support()
+    dropped_features = data.columns[~np.array(support)]  # ~是反运算符, 获得被筛掉的特征;显式地将布尔数组转换为 numpy 数组来避免类型检查工具的误报
+    return data[data.columns[selector.get_support(indices=True)]], len(dropped_features)

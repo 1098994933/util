@@ -75,7 +75,7 @@ def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predic
             text_lines.append(f"$MAE={mae:.3f}$")
         if r is not None:
             text_lines.append(f"$R={r:.3f}$")
-        plt.text(0.05, 0.80, '\n'.join(text_lines), transform=ax.transAxes, fontsize=10, bbox=dict(facecolor='white', alpha=0.6))
+        plt.text(0.05, 0.70, '\n'.join(text_lines), transform=ax.transAxes, fontsize=10, bbox=dict(facecolor='white', alpha=0.6))
     # Add optional title
     if title:
         plt.title(title, fontsize=14, fontweight='bold')
