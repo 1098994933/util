@@ -77,7 +77,7 @@ def calculate_r2(model, data_loader):
     r2 = sklearn.metrics.r2_score(outputs, targets)
     return r2
 
-def train_dnn_by_dataset(df, model,features_col=None, targets_col=None):
+def train_dnn_by_dataset(df, model,features_col=None, targets_col=None,patience = 50, num_epochs=500):
     """
     train DNN model by dataset to predict targets from alloy composition to targets
     """
@@ -97,29 +97,52 @@ def train_dnn_by_dataset(df, model,features_col=None, targets_col=None):
     train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
     # 定义损失函数和优化器
-    criterion = nn.MSELoss()  # 均方误差损失，适用于回归任务
-    optimizer = optim.Adam(model.parameters(), lr=0.01)  # 你可以选择其他的优化器和学习率
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    best_loss = float('inf')
+    patience_counter = 0
+    early_stopping = False
 
-    # training
-    num_epochs = 500
     for epoch in range(num_epochs):
-        for batch_data in train_loader:
-            inputs, targets = batch_data
-            optimizer.zero_grad()  # 清空梯度
-            outputs = model(inputs)  # 前向传播
-            loss = criterion(outputs, targets)  # 计算损失
-            loss.backward()  # 反向传播
-            optimizer.step()  # update parameters
-        # 每20个epoch 评估一次模型
-        if epoch % 20 == 0:
-            model.eval()  # set model to evaluation mode
-            with torch.no_grad():
-                r2_score = calculate_r2(model, test_loader)
-                print(f"Epoch {epoch}: test R² Score: {r2_score}")
-            model.train()  # set model to train mode
-    # save model
-    torch.save(model, './model/final_model.pth')
-    print('Final model saved')
+        model.train()
+        train_loss = 0.0
+        for inputs, targets in train_loader:
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()
+
+        train_loss /= len(train_loader)
+
+        # Evaluate on validation set
+        model.eval()
+        with torch.no_grad():
+            val_loss = sum(criterion(model(inputs), targets).item() for inputs, targets in test_loader)
+            val_loss /= len(test_loader)
+
+        # Early stopping logic
+        if val_loss < best_loss:
+            best_loss = val_loss
+            patience_counter = 0
+            # Save best model
+            torch.save(model.state_dict(), './model/best_model.pth')
+        else:
+            patience_counter += 1
+            if patience_counter >= patience:
+                early_stopping = True
+
+        # Log metrics
+        if epoch % 20 == 0 or early_stopping:
+            r2_score = calculate_r2(model, test_loader)
+            print(f"Epoch {epoch}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, R² = {r2_score:.4f}")
+
+        if early_stopping:
+            print(f"Early stopping at epoch {epoch}")
+            break
+
+    print("Training completed. Best model saved to './model/best_model.pth'.")
 
 def train_dnn(df):
     """
@@ -172,53 +195,54 @@ def train_dnn(df):
     print('Final model saved')
 
 if __name__ == '__main__':
+    pass
     # 自定义输入维度
-    dataset_file = r'./data/dataset.xlsx'
-    sheet_name = "Sheet1"
-    Y_col = '熔点'
-    df = pd.read_excel(dataset_file, sheet_name=sheet_name)
-    element_col = list(df.columns)[1:-1]
-    # 分割数据集为训练集和测试集
-    train_df, test_df = train_test_split(df, test_size=0.2, random_state=42)
-    # 定义特征列和目标列
-    features = element_col
-    target = '熔点'
-    logging.info("features", features)
-    logging.info("Y_col", target)
-
-    input_dimension = len(features)  # 例如，你可以根据需要更改这个值
-    output_dimension = 1  # 对于回归任务，通常输出维度为1
-    # 创建训练集和测试集的Dataset和DataLoader
-    train_dataset = DatasetFromDataFrame(train_df, features, target)
-    test_dataset = DatasetFromDataFrame(test_df, features, target)
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
-    # endregion
-    # 创建模型实例
-    model = RegressionDNN(input_dim=input_dimension, output_dim=output_dimension)
-
-    # 定义损失函数和优化器
-    criterion = nn.MSELoss()  # 均方误差损失，适用于回归任务
-    optimizer = optim.Adam(model.parameters(), lr=0.01)  # 你可以选择其他的优化器和学习率
-
-    # training
-    num_epochs = 500
-    for epoch in range(num_epochs):
-        for batch_data in train_loader:
-            inputs, targets = batch_data
-            optimizer.zero_grad()  # 清空梯度
-            outputs = model(inputs)  # 前向传播
-            loss = criterion(outputs, targets)  # 计算损失
-            loss.backward()  # 反向传播
-            optimizer.step()  # 更新权重
-        # 每20个epoch评估一次模型
-        if epoch % 50 == 0:
-            model.eval()  # set model to evaluation mode
-            with torch.no_grad():
-                r2_score = calculate_r2(model, test_loader)
-                print(f"Epoch {epoch}: R² Score: {r2_score}")
-            model.train()  # 继续训练模式
-
-    # save model
-    torch.save(model, './model/final_model.pth')
-    print('Final model saved')
+    # dataset_file = r'./data/dataset.xlsx'
+    # sheet_name = "Sheet1"
+    # Y_col = '熔点'
+    # df = pd.read_excel(dataset_file, sheet_name=sheet_name)
+    # element_col = list(df.columns)[1:-1]
+    # # 分割数据集为训练集和测试集
+    # train_df, test_df = train_test_split(df, test_size=0.2, random_state=42)
+    # # 定义特征列和目标列
+    # features = element_col
+    # target = '熔点'
+    # logging.info("features", features)
+    # logging.info("Y_col", target)
+    #
+    # input_dimension = len(features)  # 例如，你可以根据需要更改这个值
+    # output_dimension = 1  # 对于回归任务，通常输出维度为1
+    # # 创建训练集和测试集的Dataset和DataLoader
+    # train_dataset = DatasetFromDataFrame(train_df, features, target)
+    # test_dataset = DatasetFromDataFrame(test_df, features, target)
+    # train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+    # test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+    # # endregion
+    # # 创建模型实例
+    # model = RegressionDNN(input_dim=input_dimension, output_dim=output_dimension)
+    #
+    # # 定义损失函数和优化器
+    # criterion = nn.MSELoss()  # 均方误差损失，适用于回归任务
+    # optimizer = optim.Adam(model.parameters(), lr=0.01)  # 你可以选择其他的优化器和学习率
+    #
+    # # training
+    # num_epochs = 500
+    # for epoch in range(num_epochs):
+    #     for batch_data in train_loader:
+    #         inputs, targets = batch_data
+    #         optimizer.zero_grad()  # 清空梯度
+    #         outputs = model(inputs)  # 前向传播
+    #         loss = criterion(outputs, targets)  # 计算损失
+    #         loss.backward()  # 反向传播
+    #         optimizer.step()  # 更新权重
+    #     # 每20个epoch评估一次模型
+    #     if epoch % 50 == 0:
+    #         model.eval()  # set model to evaluation mode
+    #         with torch.no_grad():
+    #             r2_score = calculate_r2(model, test_loader)
+    #             print(f"Epoch {epoch}: R² Score: {r2_score}")
+    #         model.train()  # 继续训练模式
+    #
+    # # save model
+    # torch.save(model, './model/final_model.pth')
+    # print('Final model saved')

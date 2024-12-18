@@ -29,7 +29,8 @@ def find_elements(string):
 
 def formula_to_features(formula_list):
     """
-    :param dataset:
+    :param formula_list:
+    ci is the ratio of element_i (ei)
     :return:
     """
     features = []
@@ -42,6 +43,41 @@ def formula_to_features(formula_list):
         features.append(af.get_features())
     df = pd.DataFrame(features, columns=af.feature_names)
     return df
+
+
+def normalize_element_dict(element_dict):
+    """
+    normalize the ratio to make the sum to 1
+    :param element_dict:
+    :return:
+    """
+    normalized_element_dict = {}
+    ci = np.array(list(element_dict.values())) / np.sum(np.array(list(element_dict.values())))
+    ei = np.array(list(element_dict.keys()))
+    for index in range(len(ei)):
+        normalized_element_dict[ei[index]] = ci[index]
+    return normalized_element_dict
+
+
+def formula_to_ratio_dataset(dataset):
+    """
+    :param dataset: contain the formula column with alloys formula
+    :return:
+    """
+    df_ratio = pd.DataFrame()
+    if not "formula" in list(dataset.columns):
+        raise AssertionError(f"Error: no column named formula is not in the dataset !")
+    for i, formula in enumerate(dataset.formula):
+        element_dict = find_elements(formula)
+        normalized = normalize_element_dict(element_dict)
+        # print(normalized)
+        df_formula = pd.DataFrame(data=normalized, index=[i])
+        df_ratio = pd.concat([df_ratio, df_formula])
+    df_ratio = df_ratio.fillna(0).reset_index(drop=True)
+    dataset_reindex = dataset.reset_index(drop=True)
+    df_all = pd.concat([dataset_reindex, df_ratio], axis=1)
+    element_columns = list(df_ratio.columns)
+    return df_all, element_columns
 
 
 class AlloyFeature(object):
@@ -75,6 +111,7 @@ class AlloyFeature(object):
                               "Allen electronegativity",
                               "Number of mobile electrons",
                               ]
+
     def get_features(self):
         self.get_delat_r()
         self.get_gama()
@@ -254,7 +291,6 @@ class AlloyFeature(object):
 
 
 if __name__ == '__main__':
-
     d = find_elements("ZrCu")
     print(d)
     d = find_elements("AlCrFeNiMo0.5")
