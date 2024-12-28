@@ -133,6 +133,8 @@ def generate_shap_figures(model, X, fig_path='./figures/shap.png', n_features=5)
     plt.close()
 
     # Compute feature importance and select top features
+    if n_features <= 0:
+        return []
     feature_importance = np.abs(shap_values).mean(axis=0)
     top_features_indices = np.argsort(feature_importance)[-n_features:]
     top_features_names = X.columns[top_features_indices]
@@ -146,5 +148,4 @@ def generate_shap_figures(model, X, fig_path='./figures/shap.png', n_features=5)
 
     # Close all remaining plots to release resources
     plt.close('all')
-
     return top_features_names
