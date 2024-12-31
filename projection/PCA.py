@@ -13,16 +13,18 @@ import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from scipy.spatial.distance import cdist
 
+
 class PCAProjection(object):
     def __init__(self, n_components=2, n_clusters=3):
         self.n_components = n_components
         self.scaler = StandardScaler()
         self.pca = PCA(n_components=n_components)
-        self.kmeans = KMeans(n_clusters=n_clusters)   # 默认3类
+        self.kmeans = KMeans(n_clusters=n_clusters)  # 默认3类
         self.dimension = None
         self.x = None
         self.x_scaled = None
         self.columns = None
+
     def fit(self, X):
         """
         对数据进行标准化和PCA拟合。
@@ -43,7 +45,6 @@ class PCAProjection(object):
         # 使用KMeans聚类
         self.kmeans.fit(self.pca.transform(X_scaled))
 
-
     def visualize_kmeans(self, X, Y, save=False, filename='kmeans_pca_visualization.png'):
         """
         对X进行k-means聚类并在PCA降维后的空间中可视化。
@@ -53,7 +54,7 @@ class PCAProjection(object):
         X_pca = self.transform(X)
         # 进行k-means聚类
         labels = self.kmeans.predict(X_pca)
-        kmeans_df = pd.DataFrame(X_pca, columns=[f'PC{i+1}' for i in range(self.n_components)])
+        kmeans_df = pd.DataFrame(X_pca, columns=[f'PC{i + 1}' for i in range(self.n_components)])
         kmeans_df['Cluster'] = labels
         kmeans_df['Label'] = Y
 
@@ -86,7 +87,7 @@ class PCAProjection(object):
         X_pca = self.pca.transform(X_scaled)
         return X_pca
 
-    def visualize(self, X, Y, save=False, filename='pca_visualization.png'):
+    def visualize(self, X, Y=None, save=False, filename='pca_visualization.png'):
         """
         使用PCA将数据降维到2维，并使用seaborn的scatterplot进行可视化。
 
@@ -100,20 +101,22 @@ class PCAProjection(object):
         X_pca = self.transform(X)
 
         # 创建DataFrame以便使用seaborn
-        pca_df = pd.DataFrame(X_pca, columns=[f'PC{i+1}' for i in range(self.n_components)])
-        pca_df['Label'] = Y
-
-        # 使用seaborn的scatterplot进行可视化
-        plt.figure(figsize=(8, 6))
-        if pd.api.types.is_numeric_dtype(Y) and len(np.unique(Y)) > 7:  # 判断为连续变量:
-            scatter = sns.scatterplot(data=pca_df, x='PC1', y='PC2', hue='Label', palette='coolwarm', legend=False)
-            norm = plt.Normalize(pca_df['Label'].min(), pca_df['Label'].max())
-            sm = plt.cm.ScalarMappable(cmap='coolwarm', norm=norm)
-            sm.set_array([])
-            plt.colorbar(sm, label='Y')
-        else:  # 判断为分类变量
-            sns.scatterplot(data=pca_df, x='PC1', y='PC2', hue='Label', style='Label', palette='Set2')
-            plt.legend(title='Label')
+        pca_df = pd.DataFrame(X_pca, columns=[f'PC{i + 1}' for i in range(self.n_components)])
+        if Y is not None:
+            pca_df['Label'] = Y
+            # 使用seaborn的scatterplot进行可视化
+            plt.figure(figsize=(8, 6))
+            if pd.api.types.is_numeric_dtype(Y) and len(np.unique(Y)) > 7:  # 判断为连续变量:
+                scatter = sns.scatterplot(data=pca_df, x='PC1', y='PC2', hue='Label', palette='coolwarm', legend=False)
+                norm = plt.Normalize(pca_df['Label'].min(), pca_df['Label'].max())
+                sm = plt.cm.ScalarMappable(cmap='coolwarm', norm=norm)
+                sm.set_array([])
+                plt.colorbar(sm, label='Y')
+            else:  # 判断为分类变量
+                sns.scatterplot(data=pca_df, x='PC1', y='PC2', hue='Label', style='Label', palette='Set2')
+                plt.legend(title='Label')
+        else:
+            sns.scatterplot(data=pca_df, x='PC1', y='PC2')
         plt.title('PCA Visualization')
         plt.xlabel('Principal Component 1')
         plt.ylabel('Principal Component 2')
@@ -156,11 +159,13 @@ class PCAProjection(object):
         df_design_points -- 高维空间中的点的dataframe;
         """
         target_point = np.array([[x, y]])
+
         # 定义目标函数
         def objective(high_dim_point, target):
             """distance at low """
             low_dim_point = self.transform(high_dim_point.reshape(1, -1))
             return np.linalg.norm(low_dim_point - target) ** 2
+
         # 找到距离目标点最近的n个高维样本标准化后的数据
         distances = cdist(self.pca.transform(self.x_scaled), target_point).ravel()
         indices = np.argsort(distances)[:n_solutions]
