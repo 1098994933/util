@@ -20,7 +20,7 @@ if __name__ == '__main__':
 
     # 创建 WAE 训练器实例
     print("WAE training")
-    trainer = WAETrainer(OneDimensionalDataset(data), input_dim=input_dim, latent_dim=10)
+    trainer = WAETrainer(OneDimensionalDataset(data), input_dim=input_dim)
     # 训练模型
     trainer.train(epochs=200)
     print("WAE training finished")

@@ -4,11 +4,19 @@ from torch.nn import functional as F
 from typing import List
 from util.deep_learning.VAE.base import OneDimensionalDataset
 
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader, random_split
+import numpy as np
+import pandas as pd
+
 
 class WAE(nn.Module):
     """
     Wasserstein Autoencoder with Maximum Mean Discrepancy (MMD) for 1D data.
     """
+
     def __init__(self, input_dim: int, latent_dim: int, hidden_dims: List = None, reg_weight: int = 100,
                  kernel_type: str = 'imq', latent_var: float = 2., **kwargs):
         """
@@ -57,8 +65,9 @@ class WAE(nn.Module):
             )
         self.decoder = nn.Sequential(*modules)
         self.final_layer = nn.Sequential(
-                            nn.Linear(hidden_dims[-1], self.input_dim),
-                            nn.Sigmoid())  # Assuming the data is normalized between 0 and 1
+            nn.Linear(hidden_dims[-1], self.input_dim),
+            nn.Sigmoid()
+        )  # Assuming the data is normalized between 0 and 1
 
     def encode(self, input: torch.Tensor) -> torch.Tensor:
         """
@@ -141,33 +150,30 @@ class WAE(nn.Module):
         return self.forward(x)[0]
 
 
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader, random_split
-import numpy as np
-import pandas as pd
-
-
 class WAETrainer(object):
     """
     Trainer class for Wasserstein Autoencoder (WAE) with 1D data.
     """
-    def __init__(self, data, input_dim: int, latent_dim: int, batch_size: int = 128, learning_rate=0.0001,val_size=0.2):
+
+    def __init__(self, data, input_dim: int, latent_dims=None, batch_size: int = 128, learning_rate=0.0001,
+                 val_size=0.2):
+        self.optimizer = None
+        self.model = None
+        self.latent_dim = None  # latent_dim of best model
+        if latent_dims is None:
+            latent_dims = [10]
+        self.latent_dims = latent_dims
+        self.best_latent_dim = None
         self.data = data
         self.input_dim = input_dim
-        self.latent_dim = latent_dim
         self.batch_size = batch_size
         self.learning_rate = learning_rate
 
         # Split data into training and validation sets
         n = len(data)
-        train_size = int((1-val_size) * n)
+        train_size = int((1 - val_size) * n)
         val_size = n - train_size
         self.train_data, self.val_data = random_split(data, [train_size, val_size])
-
-        self.model = WAE(input_dim, latent_dim)  # Initialize the WAE model
-        self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
 
         self.best_val_loss = float('inf')
         self.patience = 50
@@ -181,45 +187,63 @@ class WAETrainer(object):
         return recons_loss + mmd_loss
 
     def train(self, epochs):
-        train_loader = DataLoader(self.train_data, batch_size=self.batch_size, shuffle=True)
-        val_loader = DataLoader(self.val_data, batch_size=self.batch_size)
+        for latent_dim in self.latent_dims:
+            self.model = WAE(self.input_dim, latent_dim)
+            self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+            epochs_without_improvement = 0
+            current_best_val_loss = float('inf')
 
-        for epoch in range(epochs):
-            self.model.train()
-            train_loss = 0
-            for batch in train_loader:
-                self.optimizer.zero_grad()
-                recon_batch, batch, z = self.model(batch)
-                loss = self.loss_function(recon_batch, batch, z)
-                loss.backward()
-                self.optimizer.step()
-                train_loss += loss.item()
+            train_loader = DataLoader(self.train_data, batch_size=self.batch_size, shuffle=True)
+            val_loader = DataLoader(self.val_data, batch_size=self.batch_size)
 
-            train_loss /= len(self.train_data)
-
-            self.model.eval()
-            val_loss = 0
-            with torch.no_grad():
-                for batch in val_loader:
+            for epoch in range(epochs):
+                self.model.train()
+                train_loss = 0
+                for batch in train_loader:
+                    self.optimizer.zero_grad()
                     recon_batch, batch, z = self.model(batch)
                     loss = self.loss_function(recon_batch, batch, z)
-                    val_loss += loss.item()
+                    loss.backward()
+                    self.optimizer.step()
+                    train_loss += loss.item()
 
-            val_loss /= len(self.val_data)
+                train_loss /= len(self.train_data)
 
-            print(f'Epoch {epoch + 1}/{epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
+                self.model.eval()
+                val_loss = 0
+                with torch.no_grad():
+                    for batch in val_loader:
+                        recon_batch, batch, z = self.model(batch)
+                        loss = self.loss_function(recon_batch, batch, z)
+                        val_loss += loss.item()
 
-            if val_loss < self.best_val_loss:
-                self.best_val_loss = val_loss
-                self.epochs_without_improvement = 0
-                # Save the model
-                torch.save(self.model.state_dict(), 'best_model.pth')
-            else:
-                self.epochs_without_improvement += 1
-            # Early stopping
-            if self.epochs_without_improvement >= self.patience:
-                print(f'Early stopping at epoch {epoch + 1}')
-                break
+                val_loss /= len(self.val_data)
+
+                print(
+                    f'Latent Dim: {latent_dim}, Epoch {epoch + 1}/{epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
+
+                if val_loss < current_best_val_loss:
+                    current_best_val_loss = val_loss
+                    epochs_without_improvement = 0
+                    # Save the model
+                    self.latent_dim = latent_dim
+                    torch.save(self.model.state_dict(), f'best_model_latent_{latent_dim}.pth')
+                else:
+                    epochs_without_improvement += 1
+                # Early stopping
+                if epochs_without_improvement >= self.patience:
+                    print(f'Early stopping at epoch {epoch + 1} for latent dim {latent_dim}')
+                    break
+
+            if current_best_val_loss < self.best_val_loss:
+                self.best_val_loss = current_best_val_loss
+                self.best_latent_dim = latent_dim
+
+        print(f'Best latent dim: {self.best_latent_dim} with val loss: {self.best_val_loss:.4f}')
+        self.model = WAE(self.input_dim, self.best_latent_dim)
+        self.latent_dim = self.best_latent_dim
+        self.model.load_state_dict(torch.load(f'best_model_latent_{self.best_latent_dim}.pth'))
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
     def generate_samples(self, num_samples: int):
         """
@@ -237,7 +261,7 @@ class WAETrainer(object):
         """
         self.model.eval()
         with torch.no_grad():
-            _, z = self.model.encode(x)
+            z = self.model.encode(x)
             recon_x = self.model.decode(z)
         return recon_x
 
@@ -257,10 +281,9 @@ class WAETrainer(object):
         val_data_combined = np.concatenate(val_data_list, axis=0)
         recon_data_combined = np.concatenate(recon_data_list, axis=0)
 
-        val_df = pd.DataFrame(val_data_combined, columns=[f"Feature_{i+1}" for i in range(self.input_dim)])
-        recon_df = pd.DataFrame(recon_data_combined, columns=[f"Reconstructed_Feature_{i+1}" for i in range(self.input_dim)])
+        val_df = pd.DataFrame(val_data_combined, columns=[f"Feature_{i + 1}" for i in range(self.input_dim)])
+        recon_df = pd.DataFrame(recon_data_combined,
+                                columns=[f"Reconstructed_Feature_{i + 1}" for i in range(self.input_dim)])
 
         merged_df = pd.concat([val_df, recon_df], axis=1)
         return merged_df
-
-
