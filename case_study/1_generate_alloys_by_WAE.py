@@ -19,19 +19,25 @@ if __name__ == '__main__':
     data = torch.Tensor(df_element.values)
 
     # 创建 WAE 训练器实例
+    print("WAE training")
     trainer = WAETrainer(OneDimensionalDataset(data), input_dim=input_dim, latent_dim=10)
     # 训练模型
     trainer.train(epochs=200)
+    print("WAE training finished")
+    print("WAE generation")
     # 生成样本
     gen = True
     if gen:
-        generated_samples_scaled = trainer.generate_samples(num_samples=10000)
+        generated_samples_scaled = trainer.generate_samples(num_samples=10000).numpy()
         generated_samples = trainer.data.scaler.inverse_transform(generated_samples_scaled)
         df_gen_source = pd.DataFrame(generated_samples_scaled, columns=df_element.columns)
+        # 去掉N_alloy列
+        df_gen_source.drop(columns=["N_alloy"], inplace=True)
         df_gen = pd.DataFrame(generated_samples, columns=df_element.columns)
-        N_alloy = -1 * df_gen["N_alloy"].round().astype(int)
+        N_alloy = -1 * df_gen["N_alloy"].round().astype(int).copy()
         print(N_alloy.head())
         print(df_gen.head())
+        # 每一行 找到前n大的元素
         for index, row in df_gen_source.iterrows():
             n = N_alloy[index] * -1
             top_n_indices = row.nlargest(n).index

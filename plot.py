@@ -53,7 +53,6 @@ def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predic
 
     # Plot y = x line
     plt.plot([lim_min, lim_max], [lim_min, lim_max], color='blue')
-
     # Set axis properties
     plt.xticks(fontsize=12, fontweight='bold')
     plt.yticks(fontsize=12, fontweight='bold')
