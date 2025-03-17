@@ -1,8 +1,6 @@
 import unittest
-
 import pandas as pd
-
-from util.generate.TableDataGenerator import TableDataGenerator
+from generator.TableDataGenerator import TableDataGenerator
 
 
 class TestTableDataGenerator(unittest.TestCase):
@@ -15,9 +13,10 @@ class TestTableDataGenerator(unittest.TestCase):
             'col4': ["d", "e", "f"] * 300,
         })
         generator = TableDataGenerator(data)
-        generator.train()
+        generator.train(epochs=200)
         generated_df = generator.generate(num_samples=100)
         print(generated_df)
+
     def test_generation2(self):
         # 创建一个简单的 DataFrame 用于测试
         data = pd.DataFrame({
@@ -27,7 +26,7 @@ class TestTableDataGenerator(unittest.TestCase):
             'col4': [1, 2, 10] * 300,
         })
         generator = TableDataGenerator(data)
-        generator.train()
+        generator.train(epochs=200)
         generated_df = generator.generate(num_samples=100)
         print(generated_df)
 

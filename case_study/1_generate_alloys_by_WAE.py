@@ -1,5 +1,5 @@
 """
-case study of using WAE to generate alloys
+case study of using WAE to generator alloys
 """
 import pandas as pd
 import torch

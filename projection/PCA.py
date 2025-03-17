@@ -24,6 +24,7 @@ class PCAProjection(object):
         self.x = None
         self.x_scaled = None
         self.columns = None
+        self.info = {}
 
     def fit(self, X):
         """

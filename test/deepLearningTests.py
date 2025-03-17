@@ -3,7 +3,7 @@ Tests case for the deep learning module.
 """
 import unittest
 import torch
-from util.deep_learning.VAE.WAE import WAE
+from deep_learning.VAE.WAE import WAE
 
 
 class TestWAE(unittest.TestCase):

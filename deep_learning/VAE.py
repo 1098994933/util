@@ -150,7 +150,7 @@ class VAETrainer(object):
 
     def generate_samples(self, num_samples: int):
         """
-        generate samples by VAE model
+        generator samples by VAE model
         :param num_samples:
         :return:
         """

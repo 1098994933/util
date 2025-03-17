@@ -1,7 +1,7 @@
 import pandas as pd
 import torch
-from util.deep_learning.VAE.WAE import WAETrainer
-from util.deep_learning.VAE.base import OneDimensionalDataset
+from deep_learning.VAE.WAE import WAETrainer
+from deep_learning.VAE.base import OneDimensionalDataset
 
 
 class TableDataGenerator:
@@ -20,10 +20,10 @@ class TableDataGenerator:
         self.original_df = df
         self.latent_dims = latent_dims
 
-    def train(self):
+    def train(self, epochs=200):
         self.trainer = WAETrainer(OneDimensionalDataset(self.data), input_dim=self.input_dim,
                                   latent_dims=self.latent_dims)
-        self.trainer.train(epochs=200)
+        self.trainer.train(epochs=epochs)
 
     def generate(self, num_samples=100):
         generated_samples_scaled = self.trainer.generate_samples(num_samples=num_samples).numpy()
