@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 import unittest
+from sklearn.decomposition import PCA
 
 
 class OptimalProjection(object):
@@ -11,7 +12,7 @@ class OptimalProjection(object):
     算法复杂度O(P), P为投影个数
     """
 
-    def __init__(self, projections, y, optimal_label=None, optimal_ratio_exponent=3):
+    def __init__(self, projections, y, optimal_label=None, optimal_ratio_exponent=3, min_optimal_ratio=None):
         """
         Initialize the class with projections and target values.
 
@@ -19,6 +20,7 @@ class OptimalProjection(object):
         :param y: Target values corresponding to each point in the projections.
         :param optimal_label: 优类样本的标签，用于分类数据，if it is a list of scale [target_min,target_max]
         :param optimal_ratio_exponent: control the area
+        :param min_optimal_ratio: 区域内优类样本最小占比
         """
         # 数据检测机制
         if not isinstance(projections, list):
@@ -51,6 +53,11 @@ class OptimalProjection(object):
         else:
             self.labels = np.array(y == optimal_label).astype(int)
             self.optimal_type = "cls"
+        if min_optimal_ratio is None:  # 则为优类样本比例 和 1 的平均值
+            self.min_optimal_ratio = (sum(self.labels) / len(self.labels) + 1) / 2
+
+        else:
+            self.min_optimal_ratio = min_optimal_ratio
         self.best_x = None
         self.best_model = None
         self.best_rectangle = None  # 最佳投影区域
@@ -60,7 +67,6 @@ class OptimalProjection(object):
     def find_best_projection(self):
         """
         Find the best projection that maximizes the score of rectangle area and the number of class 1 samples inside.
-
         :return: Index of the best projection and its corresponding score value.
         """
         best_index = 0
@@ -71,6 +77,7 @@ class OptimalProjection(object):
         for i, projection in enumerate(self.projections):
             x_min, x_max = np.min(projection[:, 0]), np.max(projection[:, 0])
             y_min, y_max = np.min(projection[:, 1]), np.max(projection[:, 1])
+            total_area = (x_max - x_min) * (y_max - y_min)
             x_grid_size = (x_max - x_min) / num_grids
             y_grid_size = (y_max - y_min) / num_grids
 
@@ -95,19 +102,23 @@ class OptimalProjection(object):
                             rect_y_min = y_min + y1 * y_grid_size
                             rect_y_max = y_min + y2 * y_grid_size
 
-                            # 计算矩形内的类别 1 样本数
+                            # 计算矩形内的优类样本数
                             num_class_1 = np.sum(grid_counts[x1:x2, y1:y2])
                             # 计算矩形内的总样本数
                             in_rectangle = ((projection[:, 0] >= rect_x_min) & (projection[:, 0] <= rect_x_max) &
                                             (projection[:, 1] >= rect_y_min) & (projection[:, 1] <= rect_y_max)).sum()
+
                             if in_rectangle == 0:
                                 score = 0
+                                optimal_ratio = 0
                             else:
-                                # 计算面积
+                                # 计算矩形区域面积
                                 area = (rect_x_max - rect_x_min) * (rect_y_max - rect_y_min)
-                                score = (num_class_1 / in_rectangle) ** self.optimal_ratio_exponent * area
+                                # score 为 计算矩形与总区域的面积比 * 优类样本率 ** （optimal_ratio_exponent）
+                                optimal_ratio = num_class_1 / in_rectangle
+                                score = optimal_ratio ** self.optimal_ratio_exponent * area / total_area
 
-                            if score > max_score:
+                            if score > max_score and optimal_ratio > self.min_optimal_ratio:
                                 max_score = score
                                 best_rect = (rect_x_min, rect_x_max, rect_y_min, rect_y_max)
 
@@ -149,7 +160,7 @@ class OptimalProjection(object):
         # 使用 seaborn 绘制散点图
         sns.scatterplot(x=self.best_x[:, 0], y=self.best_x[:, 1], hue=self.labels, palette={0: 'blue', 1: 'orange'},
                         edgecolor='k')
-        plt.title('Best Rectangle on Best Projection')
+        plt.title('Optimal Projection')
         plt.xlabel('Feature 1')
         plt.ylabel('Feature 2')
 
@@ -173,6 +184,42 @@ class OptimalProjection(object):
         plt.legend(legend_handles, legend_labels, loc='upper left', bbox_to_anchor=(1, 1))
         plt.tight_layout()
         plt.show()
+
+    def get_rectangle_equations(self, pca, feature_names):
+        """
+        Get the equations of the rectangle in terms of the original features.
+
+        :param pca: Fitted PCA object from sklearn.
+        :param feature_names: List of feature names corresponding to the original features.
+        :return: Equations of the rectangle in terms of the original features.
+        """
+        if self.best_rectangle is None:
+            print("Please run find_best_projection() first.")
+            return
+
+        x_min, x_max, y_min, y_max = self.best_rectangle
+        components = pca.components_[:2]
+
+        equations = []
+        # 处理 x 方向的方程
+        equation_x = []
+        for i, coef in enumerate(components[0]):
+            term = f"{coef:.2f}*{feature_names[i]}"
+            equation_x.append(term)
+        equation_str_x = " + ".join(equation_x)
+        full_equation_x = f"{x_min:.2f} <= {equation_str_x} <= {x_max:.2f}"
+        equations.append(full_equation_x)
+
+        # 处理 y 方向的方程
+        equation_y = []
+        for i, coef in enumerate(components[1]):
+            term = f"{coef:.2f}*{feature_names[i]}"
+            equation_y.append(term)
+        equation_str_y = " + ".join(equation_y)
+        full_equation_y = f"{y_min:.2f} <= {equation_str_y} <= {y_max:.2f}"
+        equations.append(full_equation_y)
+
+        return equations
 
 
 class TestOptimalProjection(unittest.TestCase):
@@ -292,6 +339,27 @@ class TestOptimalProjection(unittest.TestCase):
         optimal_label = 2
         with self.assertRaises(ValueError):
             OptimalProjection(projections, y, optimal_label)
+
+    def test_get_rectangle_equations(self):
+        """
+        测试 get_rectangle_equations 方法
+        """
+        sample_num = 100
+        pca = PCA(n_components=2)
+        # 这里需要一个合适的数据集来拟合 PCA，假设 data 是原始数据集
+        x = np.random.rand(sample_num, 5)
+        y = np.random.rand(sample_num)
+        x_transformed = pca.fit_transform(x)
+        feature_names = [f'feature_{i}' for i in range(x.shape[1])]
+        projections = [x_transformed]
+
+        op = OptimalProjection(projections, y)
+        op.find_best_projection()
+        op.plot_decision_boundary()
+        equations = op.get_rectangle_equations(pca, feature_names)
+        for equation in equations:
+            print(equation)
+        self.assertEqual(isinstance(equations, list), True)
 
 
 if __name__ == "__main__":
