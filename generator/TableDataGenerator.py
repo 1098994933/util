@@ -2,6 +2,7 @@ import pandas as pd
 import torch
 from deep_learning.VAE.WAE import WAETrainer
 from deep_learning.VAE.base import OneDimensionalDataset
+from sklearn.preprocessing import LabelEncoder
 
 
 class TableDataGenerator:
@@ -9,16 +10,21 @@ class TableDataGenerator:
         if latent_dims is None:
             latent_dims = [1, 5, 10, 20]
         self.trainer = None
-        # 分离数值列和字符串列
         self.numeric_cols = df.select_dtypes(include=['number']).columns
         self.string_cols = df.select_dtypes(include=['object']).columns
-        # 对字符串列进行 one - hot 编码
-        df_encoded = pd.get_dummies(df, columns=self.string_cols)
-        self.input_dim = df_encoded.shape[1]  # 列数量
-        self.data = torch.Tensor(df_encoded.values)
-        self.column = df_encoded.columns
+        self.label_encoders = {}
         self.original_df = df
         self.latent_dims = latent_dims
+        self.encoded_data = df.copy()
+
+        # 对字符串列使用 LabelEncoder 编码
+        for col in self.string_cols:
+            le = LabelEncoder()
+            self.encoded_data[col] = le.fit_transform(self.encoded_data[col])
+            self.label_encoders[col] = le
+
+        self.data = torch.Tensor(self.encoded_data.values)
+        self.input_dim = self.data.shape[1]
 
     def train(self, epochs=200):
         self.trainer = WAETrainer(OneDimensionalDataset(self.data), input_dim=self.input_dim,
@@ -28,12 +34,12 @@ class TableDataGenerator:
     def generate(self, num_samples=100):
         generated_samples_scaled = self.trainer.generate_samples(num_samples=num_samples).numpy()
         generated_samples = self.trainer.data.scaler.inverse_transform(generated_samples_scaled)
-        df_gen_encoded = pd.DataFrame(generated_samples, columns=self.column)
-        # 逆变换 one - hot 编码
+        df_gen_encoded = pd.DataFrame(generated_samples, columns=self.encoded_data.columns)
         df_gen = df_gen_encoded.copy()
+
+        # 对字符串列使用 LabelEncoder 解码
         for col in self.string_cols:
-            original_categories = self.original_df[col].unique()
-            encoded_cols = [col + '_' + str(cat) for cat in original_categories]
-            df_gen[col] = df_gen_encoded[encoded_cols].idxmax(axis=1).str.replace(col + '_', '')
-            df_gen = df_gen.drop(encoded_cols, axis=1)
+            le = self.label_encoders[col]
+            df_gen[col] = le.inverse_transform(df_gen[col].astype(int))
+
         return df_gen

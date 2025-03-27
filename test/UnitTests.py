@@ -8,7 +8,6 @@ import numpy as np
 from eval import cal_reg_metric
 from plot import plot_regression_results
 
-
 class MlTest(unittest.TestCase):
     def test_cal_metric(self):
         y_true = [1, 2, 3, 4]
@@ -49,12 +48,16 @@ class MlTest(unittest.TestCase):
 
 
 class AutoDesignTests(unittest.TestCase):
+    """
+    测试自动材料设计
+    """
+
     def setUp(self):
         self.df = pd.DataFrame({
-            'col1': [1, 2, 6, 4] * 10,
-            'col2': ['a', 'b', 'a', 'b'] * 10,
-            'col3': [2, 2, 0, 4] * 10,
-            "y": [3, 6, 6, 8] * 10
+            'col1': [1, 2, 6, 4] * 300,
+            'col2': ['a', 'b', 'a', 'c'] * 300,
+            'col3': [2, 2, 0, 4] * 300,
+            "y": [3, 4, 6, 8] * 300
         })
         self.x_cols = ['col1', 'col2', 'col3']
         self.y_cols = ["y"]
@@ -62,7 +65,7 @@ class AutoDesignTests(unittest.TestCase):
         self.targets = [4]
 
     def test_fit(self):
-        for y_col, target in zip(self.y_cols,self.targets):
+        for y_col, target in zip(self.y_cols, self.targets):
             from DataPreprocessor import DataPreprocessor
             preprocessor = DataPreprocessor()
             preprocessor.fit(self.df)
@@ -84,17 +87,34 @@ class AutoDesignTests(unittest.TestCase):
             print(best_model)
             print(best_model_info)
             from projection.PCA import PCAProjection
-            n_components = min(len(x.columns), 3)
+            n_components = min(len(x.columns), 2)
             projector = PCAProjection(n_components=n_components, n_clusters=3)
             projector.fit(x)
             X_pca = projector.transform(x)
             # 计算每个样本与设计目标的差距，选择差距小的为优类，否则为劣类
-            y_pca = -1 * abs(y - target)
+            y_pca = np.array(-1 * abs(y - target))
             from projection.OptimalProjection import OptimalProjection
             # op默认大为优类
-            op = OptimalProjection([X_pca], y_pca)
-            op.find_best_projection()
-            op.plot_decision_boundary()
+            if n_components >= 2:
+                op = OptimalProjection([X_pca], y_pca)
+                op.find_best_projection()
+                op.plot_decision_boundary()
+                equations = op.get_rectangle_equations(pca=projector.pca, feature_names=x_cols)
+                print(equations)
+            else:
+                print("n_components<2, cannot use OptimalProjection")
+
+            # generate data by wae
+            from generator.TableDataGenerator import TableDataGenerator
+            print(self.df)
+            generator = TableDataGenerator(self.df)
+            generator.train(epochs=200)
+            generate_df = generator.generate(num_samples=100)
+            print("generate_df", generate_df)
+            generate_df_preprocessed = preprocessor.transform(generate_df)
+            generate_df[y_col] = best_model.predict(generate_df_preprocessed[selected_features])
+            print(generate_df.head(50))
+
 
 if __name__ == '__main__':
     unittest.main()

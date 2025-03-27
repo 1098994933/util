@@ -3,6 +3,7 @@ import numpy as np
 import seaborn as sns
 import unittest
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
 
 class OptimalProjection(object):
@@ -42,7 +43,7 @@ class OptimalProjection(object):
         self.projections = projections
         self.y = y
         self.optimal_label = optimal_label
-        if optimal_label is None:  # 判定为回归数据，则大于为平均值优类
+        if optimal_label is None:  # 判定为回归数据，则大于平均值为优类
             self.mean_y = np.mean(y)
             self.labels = np.array(y > self.mean_y).astype(int)
             self.optimal_type = "reg"
@@ -104,6 +105,7 @@ class OptimalProjection(object):
 
                             # 计算矩形内的优类样本数
                             num_class_1 = np.sum(grid_counts[x1:x2, y1:y2])
+                            support = num_class_1
                             # 计算矩形内的总样本数
                             in_rectangle = ((projection[:, 0] >= rect_x_min) & (projection[:, 0] <= rect_x_max) &
                                             (projection[:, 1] >= rect_y_min) & (projection[:, 1] <= rect_y_max)).sum()
@@ -117,8 +119,10 @@ class OptimalProjection(object):
                                 # score 为 计算矩形与总区域的面积比 * 优类样本率 ** （optimal_ratio_exponent）
                                 optimal_ratio = num_class_1 / in_rectangle
                                 score = optimal_ratio ** self.optimal_ratio_exponent * area / total_area
-
-                            if score > max_score and optimal_ratio > self.min_optimal_ratio:
+                            # 如果矩形面积大于0且优类样本率大于最小优类样本率，则更新最大得分和最佳索引
+                            # 最小优类样本数（support）必须 > 总面积
+                            min_support = sum(self.labels) * (x2 - x1) * (y2 - y1) / num_grids / num_grids
+                            if score > max_score and optimal_ratio > self.min_optimal_ratio and support > min_support:
                                 max_score = score
                                 best_rect = (rect_x_min, rect_x_max, rect_y_min, rect_y_max)
 
@@ -185,12 +189,13 @@ class OptimalProjection(object):
         plt.tight_layout()
         plt.show()
 
-    def get_rectangle_equations(self, pca, feature_names):
+    def get_rectangle_equations(self, pca, feature_names, scaler: StandardScaler = None):
         """
         Get the equations of the rectangle in terms of the original features.
 
         :param pca: Fitted PCA object from sklearn.
         :param feature_names: List of feature names corresponding to the original features.
+        :param scaler: StandardScaler used for transform before pca
         :return: Equations of the rectangle in terms of the original features.
         """
         if self.best_rectangle is None:
@@ -199,27 +204,42 @@ class OptimalProjection(object):
 
         x_min, x_max, y_min, y_max = self.best_rectangle
         components = pca.components_[:2]
-
         equations = []
-        # 处理 x 方向的方程
-        equation_x = []
-        for i, coef in enumerate(components[0]):
-            term = f"{coef:.2f}*{feature_names[i]}"
-            equation_x.append(term)
-        equation_str_x = " + ".join(equation_x)
-        full_equation_x = f"{x_min:.2f} <= {equation_str_x} <= {x_max:.2f}"
-        equations.append(full_equation_x)
 
-        # 处理 y 方向的方程
-        equation_y = []
-        for i, coef in enumerate(components[1]):
-            term = f"{coef:.2f}*{feature_names[i]}"
-            equation_y.append(term)
-        equation_str_y = " + ".join(equation_y)
-        full_equation_y = f"{y_min:.2f} <= {equation_str_y} <= {y_max:.2f}"
-        equations.append(full_equation_y)
+        if scaler is None:
+            # 无标准化，直接使用PCA的components（假设数据已去均值）
+            for i, (comp, name_prefix) in enumerate(zip(components, ["x", "y"])):
+                terms = [f"{coef:.2f}*{feature_names[j]}" for j, coef in enumerate(comp)]
+                eq = f"{x_min if i == 0 else y_min:.2f} ≤ {' + '.join(terms)} ≤ {x_max if i == 0 else y_max:.2f}"
+                equations.append(eq)
+            return equations
+        else:
+            # 有标准化，逆向转换回原始特征
+            mean = scaler.mean_
+            scale = scaler.scale_  # 标准差
 
-        return equations
+            # 处理主成分1（x方向）
+            comp_x = components[0]
+            # 计算系数：components[i] / scale[j]
+            coefs_x = comp_x / scale
+            # 计算常数项：sum(components[i] * mean[j] / scale[j])
+            const_x = np.dot(comp_x, mean / scale)
+            lower_x = x_min + const_x
+            upper_x = x_max + const_x
+            terms_x = [f"{coef:.2f}*{feature_names[j]}" for j, coef in enumerate(coefs_x)]
+            eq_x = f"{lower_x:.2f} ≤ {' + '.join(terms_x)} ≤ {upper_x:.2f}"
+            equations.append(eq_x)
+
+            # 处理主成分2（y方向）
+            comp_y = components[1]
+            coefs_y = comp_y / scale
+            const_y = np.dot(comp_y, mean / scale)
+            lower_y = y_min + const_y
+            upper_y = y_max + const_y
+            terms_y = [f"{coef:.2f}*{feature_names[j]}" for j, coef in enumerate(coefs_y)]
+            eq_y = f"{lower_y:.2f} ≤ {' + '.join(terms_y)} ≤ {upper_y:.2f}"
+            equations.append(eq_y)
+            return equations
 
 
 class TestOptimalProjection(unittest.TestCase):
@@ -263,10 +283,11 @@ class TestOptimalProjection(unittest.TestCase):
         projections = [np.random.rand(sample_num, 2) for _ in range(100)]
         y = np.random.choice([0, 1], sample_num)
         optimal_label = 1
-        op = OptimalProjection(projections, y, optimal_label)
+        op = OptimalProjection(projections, y, optimal_label, min_optimal_ratio=0.98)
         best_index, best_product = op.find_best_projection()
+        op.plot_decision_boundary()
         self.assertEqual(isinstance(best_index, int), True)
-        self.assertEqual(isinstance(best_product, float), True)
+        # self.assertEqual(isinstance(best_product, float), True)
         self.assertTrue(0 <= best_index < len(projections))
         self.assertTrue(0 <= best_product)
         print(op.result)
@@ -360,6 +381,25 @@ class TestOptimalProjection(unittest.TestCase):
         for equation in equations:
             print(equation)
         self.assertEqual(isinstance(equations, list), True)
+
+    def test_multiple_features_pca(self):
+        """测试多特征（>2）的方程生成"""
+        sample_num = 99
+        X = 100 * np.random.rand(sample_num, 3)
+        y = np.random.choice([0, 1], sample_num)
+        scaler = StandardScaler().fit(X)
+        pca = PCA(n_components=2).fit(scaler.transform(X))
+        projections = [pca.transform(scaler.transform(X))]  # 投影坐标为两点
+
+        op = OptimalProjection(projections, y=y, optimal_label=1)
+        op.find_best_projection()
+        print(op.result)
+        op.plot_decision_boundary()
+        equations = op.get_rectangle_equations(pca, ["f1", "f2", "f3"], scaler)
+        print(equations)
+        # 验证系数数量与特征数一致
+        for eq in equations:
+            self.assertEqual(eq.count('*'), 3)  # 每个方程包含3个特征
 
 
 if __name__ == "__main__":

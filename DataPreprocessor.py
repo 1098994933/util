@@ -26,7 +26,7 @@ class DataPreprocessor(object):
             # 删除缺失值大于指定阈值的列
             missing_percentage = df.isnull().mean()
             self.columns_to_drop = missing_percentage[missing_percentage > self.missing_threshold].index.tolist()
-            df.drop(columns=self.columns_to_drop, inplace=True)
+            df = df.drop(columns=self.columns_to_drop)
 
             # 对输入的 dataframe 中的 str 列进行 LabelEncode 编码
             str_columns = df.select_dtypes(include='object').columns
@@ -48,7 +48,7 @@ class DataPreprocessor(object):
         """
         try:
             # 删除已知要删除的列
-            df.drop(columns=self.columns_to_drop, inplace=True, errors='ignore')
+            df = df.drop(columns=self.columns_to_drop, errors='ignore')
 
             # 编码字符串列
             for column, le in self.label_encoders.items():

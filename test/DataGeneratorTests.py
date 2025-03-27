@@ -7,7 +7,7 @@ class TestTableDataGenerator(unittest.TestCase):
     def test_generation(self):
         # 创建一个简单的 DataFrame 用于测试
         data = pd.DataFrame({
-            'col1': ["a", "b", "c"] * 300,
+            'col1': [1.0, 2.0, 3.0] * 300,
             'col2': ["a", "b", "c"] * 300,
             'col3': ["d", "e", "f"] * 300,
             'col4': ["d", "e", "f"] * 300,
