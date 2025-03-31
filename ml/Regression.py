@@ -322,3 +322,16 @@ class RegressionModel(object):
                 self.best_model_info = model_info
                 self.best_model = reg_model
         return model_infos
+
+    def save_model(self, path: str):
+        """
+
+        """
+        with open(path, "wb") as file:
+            pickle.dump(self, file)
+
+    def load_model(self, path: str):
+        with open(path, "rb") as file:
+            reg_model = pickle.load(file)
+        return reg_model
+

@@ -179,13 +179,6 @@ def generate_alloys_random(search_range, residual_element, category_col=[], samp
             rows[col] = np.round(np.random.uniform(search_range[col][0], search_range[col][1], samples), 2)
         if col in category_col:  # category features
             rows[col] = np.random.choice(search_range[col], size=samples, replace=True)
-    #
-    # for i in range(samples):
-    #
-    #         if col in elements_col:  # elements features
-    #             rows[col] = [round(random.uniform(search_range[col][0], search_range[col][1]), 2)]
-    #         if col in category_col:  # category features
-    #             rows[col] = random.sample(search_range[col], 1)
 
     result = pd.DataFrame(rows, columns=search_range.keys())
     result[residual_element] = 100
@@ -323,7 +316,3 @@ def get_weight_dict():
     df = pd.read_excel(root_path + "/project_data/elements.xlsx", index_col="formula")
     return df[col].to_dict()
 
-
-if __name__ == '__main__':
-    """ test """
-    pass
