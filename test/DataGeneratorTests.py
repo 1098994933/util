@@ -1,6 +1,6 @@
 import unittest
 import pandas as pd
-from generator.TableDataGenerator import TableDataGenerator
+from ..generator.TableDataGenerator import TableDataGenerator
 
 
 class TestTableDataGenerator(unittest.TestCase):
