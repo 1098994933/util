@@ -131,7 +131,7 @@ def model_fit_evaluation(model, x_train, y_train, x_test, y_test, n_fold=5):
         y_tr = y_train[train_index]
         x_validation = x_train[test_index]  # get validation set
         y_validation = y_train[test_index]
-        model.fit(x_tr, y_tr)
+        model.fit_cls_model(x_tr, y_tr)
 
         result_subset = pd.DataFrame()  # save the prediction
         result_subset["y_validation"] = y_validation
@@ -141,7 +141,7 @@ def model_fit_evaluation(model, x_train, y_train, x_test, y_test, n_fold=5):
     c = evaluate_model_plot(result["y_validation"], result["y_pred"], show=False)
 
     print("error in testing set：")
-    model.fit(x_train, y_train)
+    model.fit_cls_model(x_train, y_train)
     y_test_pred = model.predict(x_test)
     error_metric_testing = evaluate_model_plot(y_test, y_test_pred, show=False)  # 不画图
     print("====================================")

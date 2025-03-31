@@ -189,7 +189,7 @@ class RegressionModel(object):
             for key in param.keys():
                 params[key] = param[key]
         reg_model = alg(**params)
-        reg_model.fit(self.x_train, self.y_train)
+        reg_model.fit_cls_model(self.x_train, self.y_train)
         self.model = reg_model
         train_y_predict = list(np.array(self.model.predict(self.x_train), dtype=float))
         train_y_true = list(np.array(self.y_train, dtype=float))
@@ -249,7 +249,7 @@ class RegressionModel(object):
             alg = reg_model_config[alg_name]["model"]
             params = reg_model_config[alg_name]["model_params"]  # use default param
             reg_model = alg(**params)
-            reg_model.fit(self.x_train, self.y_train)
+            reg_model.fit_cls_model(self.x_train, self.y_train)
             model = reg_model
             train_y_predict = list(np.array(model.predict(self.x_train), dtype=float))
             train_y_true = list(np.array(self.y_train, dtype=float))

@@ -1,3 +1,3 @@
 """
-virtual data generation
+package for virtual data generation
 """
