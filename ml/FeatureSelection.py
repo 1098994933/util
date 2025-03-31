@@ -254,7 +254,7 @@ class FeatureSelector(object):
         self.select_method = "向前选择法"
         self.select_method_name = "向前选择法"
         cv = selector_params.get("cv", 5)
-        estimator.fit(x, y)
+        estimator.fit_cls_model(x, y)
         sfs = SequentialFeatureSelector(estimator, n_features_to_select=n_features_to_select, cv=cv,
                                         direction=direction)
         sfs.fit(x, y)
@@ -314,7 +314,7 @@ class FeatureSelector(object):
         self.select_method_name = "特征迭代消除法"
         cv = selector_params.get("cv", 5)
         step = selector_params.get("step", 1)
-        estimator.fit(x, y)
+        estimator.fit_cls_model(x, y)
 
         fs = RFECV(estimator, cv=cv, step=step, scoring=scoring)
         fs.fit(x, y)

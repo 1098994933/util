@@ -32,7 +32,7 @@ class TableDataGenerator:
         self.trainer.train(epochs=epochs)
 
     def generate(self, num_samples=100):
-        generated_samples_scaled = self.trainer.generate_samples(num_samples=num_samples).numpy()
+        generated_samples_scaled = self.trainer.random_generate_samples(num_samples=num_samples).numpy()
         generated_samples = self.trainer.data.scaler.inverse_transform(generated_samples_scaled)
         df_gen_encoded = pd.DataFrame(generated_samples, columns=self.encoded_data.columns)
         df_gen = df_gen_encoded.copy()

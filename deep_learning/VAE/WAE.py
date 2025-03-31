@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from typing import List
-from util.deep_learning.VAE.base import OneDimensionalDataset
+from deep_learning.VAE.base import OneDimensionalDataset
 
 import torch
 import torch.nn as nn
