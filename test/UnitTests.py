@@ -1,12 +1,13 @@
 import unittest
 
 import pandas as pd
-from base_function import generate_alloys_random
-from base_function import is_pareto_efficient
+from ..base_function import generate_alloys_random
+from ..base_function import is_pareto_efficient
 import numpy as np
 
 from eval import cal_reg_metric
 from plot import plot_regression_results
+
 
 class MlTest(unittest.TestCase):
     def test_cal_metric(self):
