@@ -45,16 +45,16 @@ class MLModelProblem(Problem):
     def _evaluate(self, x, out, *args, **kwargs):
         F = []
         for i, (model, features) in enumerate(zip(self.models, self.features_list)):
-            # 提取模型对应的特征
+            # 提取每个模型的特征子集
             X_sub = x[:, features]
 
             # 获取预测结果并确保形状正确
-            pred = model.predict(X_sub).reshape(-1, 1)
+            y_predict = model.predict(X_sub).reshape(-1, 1)
 
             # 根据优化方向调整目标值
             if self.directions[i] == 'max':
-                pred = -pred  # pymoo默认最小化，最大化目标取负数
-            F.append(pred)
+                y_predict = -y_predict  # pymoo默认最小化，最大化目标取负数
+            F.append(y_predict)
 
         out["F"] = np.hstack(F)
 
