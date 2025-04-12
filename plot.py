@@ -1,10 +1,12 @@
 """
 functions of plot figures
 """
+import warnings
 from typing import List
 
 from matplotlib.pylab import mpl
 import pandas as pd
+import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -181,7 +183,121 @@ def plot_corr(dataset: pd.DataFrame, targets, save_path=None, title=None, figsiz
     else:
         plt.tight_layout()
         plt.show()
+    return corr_matrix
 
+
+from typing import Tuple
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import warnings
+
+
+def plot_feature_importance(
+        features: list,
+        feature_importance: np.ndarray,
+        n: int = 10,
+        save_path: str = None,
+        figsize: tuple = None,
+        color_map: str = 'viridis',
+        show_values: bool = True
+) -> Tuple[pd.DataFrame, plt.Figure]:
+    """
+    可视化特征重要性并返回绘图数据
+
+    参数：
+    features : list - 特征名称列表
+    feature_importance : np.ndarray - 特征重要性值数组
+    n : int - 显示前n个重要特征 (默认10)
+    save_path : str - 图片保存路径 (可选)
+    figsize : tuple - 自定义图形尺寸 (可选)
+    color_map : str - 颜色映射方案 (默认'viridis')
+    show_values : bool - 是否显示重要性数值 (默认True)
+
+    返回：
+    Tuple[pd.DataFrame, plt.Figure] - (包含特征和重要性值的DataFrame, 图形对象)
+    """
+
+    # 参数验证
+    if len(features) != len(feature_importance):
+        raise ValueError("特征名称与重要性值数量不一致")
+    if n <= 0:
+        raise ValueError("n必须大于0")
+    if len(features) == 0:
+        raise ValueError("特征列表不能为空")
+
+    # 数据预处理
+    n = min(n, len(features))
+    max_importance = feature_importance.max()
+
+    # 处理全零重要性特殊情况
+    if max_importance == 0:
+        normalized_importance = np.zeros_like(feature_importance)
+        warnings.warn("所有特征重要性为零，请检查模型", UserWarning)
+    else:
+        normalized_importance = 100.0 * (feature_importance / max_importance)
+
+    # 排序处理
+    sorted_idx = np.argsort(normalized_importance)[-n:][::-1]
+    sorted_features = [features[i] for i in sorted_idx]
+    sorted_importance = normalized_importance[sorted_idx]
+
+    # 创建返回数据
+    result_df = pd.DataFrame({
+        'feature': sorted_features,
+        'importance': sorted_importance,
+        'raw_importance': feature_importance[sorted_idx]  # 保留原始值
+    }).sort_values('importance', ascending=False)
+
+    # 可视化部分
+    fig = plt.figure(figsize=figsize or (10, max(4, 0.6 * n)), dpi=100)
+    ax = fig.add_subplot(111)
+
+    # 绘制条形图
+    colors = plt.cm.get_cmap(color_map)(np.linspace(0.3, 1, n))
+    bars = ax.barh(
+        y=np.arange(n),
+        width=sorted_importance,
+        height=0.8,
+        color=colors,
+        edgecolor='black',
+        linewidth=0.5
+    )
+
+    # 添加数值标签
+    if show_values:
+        for bar in bars:
+            width = bar.get_width()
+            label = f"{width:.1f}%" if max_importance != 0 else "0.0%"
+            ax.text(
+                x=width + 0.5,
+                y=bar.get_y() + bar.get_height() / 2,
+                s=label,
+                va='center',
+                ha='left',
+                fontsize=9,
+                color='black'
+            )
+
+    # 坐标轴设置
+    ax.set_yticks(np.arange(n))
+    ax.set_yticklabels(sorted_features, fontsize=10)
+    ax.invert_yaxis()
+
+    # 样式优化
+    ax.spines[['top', 'right']].set_visible(False)
+    ax.spines[['left', 'bottom']].set_color('#404040')
+    ax.grid(True, axis='x', linestyle='--', alpha=0.7)
+
+    ax.set_xlabel('Relative Importance (%)', fontsize=12)
+    ax.set_title('Feature Importance Ranking', fontsize=14, pad=20)
+
+    # 保存或显示
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight', pad_inches=0.2)
+    else:
+        plt.tight_layout()
+    return result_df, fig
 
 import shap
 import numpy as np
