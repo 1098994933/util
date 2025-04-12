@@ -6,7 +6,7 @@ from ..base_function import is_pareto_efficient
 import numpy as np
 
 from eval import cal_reg_metric
-from plot import plot_regression_results
+from plot import plot_regression_results, plot_corr
 
 
 class MlTest(unittest.TestCase):
@@ -47,6 +47,12 @@ class MlTest(unittest.TestCase):
         is_pareto = is_pareto_efficient(data, return_mask=False)
         print(is_pareto)
 
+    def test_plot_correlation(self):
+
+        df = pd.DataFrame(
+            np.random.random(size=(1000, 10))
+        )
+        plot_corr(df, list(df.columns), save_path=r'C:\Users\10989\Desktop\corr.png')
 
 class AutoDesignTests(unittest.TestCase):
     """
