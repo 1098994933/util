@@ -21,18 +21,17 @@ def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predic
         y_test_predict (list or array): Predicted values for the test set.
         Y_train (list or array, optional): Actual values for the training set. Default is None.
         y_train_predict (list or array, optional): Predicted values for the training set. Default is None.
-        x_label (str): Label for the x-axis. Default is "Measured(CFS)".
-        y_label (str): Label for the y-axis. Default is "Predicted(CFS)".
+        x_label (str): Label for the x-axis. Default is "Measured".
+        y_label (str): Label for the y-axis. Default is "Predicted".
         title (str, optional): Title for the plot. Default is None.
         figure_size (tuple): Size of the figure. Default is (7, 5).
-        font (str): Font for text. Default is 'Arial'.
         alpha_test (float): Transparency for test set points. Default is 0.4.
         alpha_train (float): Transparency for train set points. Default is 0.4.
         legend_loc (str): Location of the legend. Default is 'best'.
         grid_style (str): Line style for the grid. Default is "--".
         save_path (str, optional): Path to save the plot. Default is None.
         plot_test_index (bool): Whether to label each point with its index. Default is False.
-        evaluation_matrix (dict, optional): Dictionary containing evaluation metrics such as R2, MAE, and R. Default is None.
+        evaluation_matrix (dict, optional): Dictionary containing evaluation metrics such as R2, MAE, and R.
     """
 
     # Calculate plot limits
@@ -40,8 +39,23 @@ def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predic
     if Y_train is not None and y_train_predict is not None:
         all_values.extend([Y_train, y_train_predict])
 
-    lim_max = max(max(v) for v in all_values) * 1.02
-    lim_min = min(min(v) for v in all_values) * 0.98
+    # 计算全局最小值和最大值
+    global_min = min(min(v) for v in all_values)
+    global_max = max(max(v) for v in all_values)
+    data_range = global_max - global_min
+
+    # 处理数据范围为零或极小的情况
+    if data_range == 0:
+        if global_max == 0:
+            padding = 1.0  # 如果全为0，默认扩展1个单位
+        else:
+            padding = abs(global_max) * 0.02  # 按绝对值的2%扩展
+        lim_min = global_min - padding
+        lim_max = global_max + padding
+    else:
+        padding = data_range * 0.02  # 扩展数据范围的2%
+        lim_min = global_min - padding
+        lim_max = global_max + padding
 
     # Plot setup
     plt.figure(figsize=figure_size)
@@ -94,7 +108,6 @@ def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predic
     plt.show()
 
 import shap
-import matplotlib.pyplot as plt
 import numpy as np
 
 
