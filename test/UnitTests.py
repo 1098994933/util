@@ -1,13 +1,12 @@
 import unittest
-
+import numpy as np
 import pandas as pd
 from ..base_function import generate_alloys_random
 from ..base_function import is_pareto_efficient
-import numpy as np
 
 from eval import cal_reg_metric
-from plot import plot_regression_results
-
+from plot import plot_regression_results, plot_corr, plot_feature_importance
+import matplotlib.pyplot as plt
 
 class MlTest(unittest.TestCase):
     def test_cal_metric(self):
@@ -46,6 +45,28 @@ class MlTest(unittest.TestCase):
         data = np.array([[1, 1], [2, 2], [3, 3], [-1, 5]])
         is_pareto = is_pareto_efficient(data, return_mask=False)
         print(is_pareto)
+
+    def test_plot_correlation(self):
+        df = pd.DataFrame(
+            np.random.random(size=(1000, 10))
+        )
+        plot_corr(df, list(df.columns), save_path=r'C:\Users\10989\Desktop\corr.png')
+
+    def test_plot_feature_importance(self):
+        features = [f'Feature_{i}' for i in range(1, 21)]
+        importance = np.random.rand(20) * 10
+        result_df, fig = plot_feature_importance(features, importance, n=8)
+        print(result_df)
+        plt.show()
+        result_df, fig = plot_feature_importance(
+            features,
+            importance,
+            n=15,
+            color_map='plasma',
+            show_values=False,
+            figsize=(12, 9),
+        )
+        plt.show()
 
 
 class AutoDesignTests(unittest.TestCase):
