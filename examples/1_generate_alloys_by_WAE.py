@@ -28,7 +28,7 @@ if __name__ == '__main__':
     # 生成样本
     gen = True
     if gen:
-        generated_samples_scaled = trainer.random_generate_samples(num_samples=10000).numpy()
+        generated_samples_scaled = trainer.generate_samples(num_samples=10000).numpy()
         # 反归一化得到生成样本 (成分 + 元素个数）
         generated_samples = trainer.data.scaler.inverse_transform(generated_samples_scaled)
         df_gen_source = pd.DataFrame(generated_samples_scaled, columns=df_element.columns)
