@@ -4,8 +4,8 @@ import pandas as pd
 from ..base_function import generate_alloys_random
 from ..base_function import is_pareto_efficient
 
-from eval import cal_reg_metric
-from plot import plot_regression_results, plot_corr, plot_feature_importance
+from ..eval import cal_reg_metric
+from ..plot import plot_regression_results, plot_corr, plot_feature_importance
 import matplotlib.pyplot as plt
 
 class MlTest(unittest.TestCase):
