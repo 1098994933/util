@@ -299,6 +299,7 @@ def plot_feature_importance(
         plt.tight_layout()
     return result_df, fig
 
+
 import shap
 import numpy as np
 
@@ -353,3 +354,61 @@ def generate_shap_figures(model, X, fig_path='./figures/shap.png', n_features=5)
     # Close all remaining plots to release resources
     plt.close('all')
     return top_features_names
+
+
+def plot_decision_tree(model, feature_names=None, class_names=None, save_path=None,
+                       figsize=(20, 10), max_depth=None, fontsize=10,
+                       filled=True, rounded=True, impurity=True):
+    """
+    可视化决策树模型
+    
+    params:
+    model: sklearn.tree.DecisionTreeClassifier 或 DecisionTreeRegressor
+        训练好的决策树模型
+    feature_names: list, optional
+        特征名称列表，如果为None则使用默认的X[0], X[1]等
+    class_names: list, optional
+        类别名称列表，仅用于分类问题
+    save_path: str, optional
+        图片保存路径
+    figsize: tuple, optional
+        图形大小，默认为(20, 10)
+    max_depth: int, optional
+        显示的最大深度，如果为None则显示完整树
+    fontsize: int, optional
+        字体大小，默认为10
+    filled: bool, optional
+        是否填充节点颜色，默认为True
+    rounded: bool, optional
+        是否使用圆角矩形，默认为True
+    impurity: bool, optional
+        是否显示不纯度，默认为True
+    
+    return:
+    fig: matplotlib.figure.Figure
+        图形对象
+    """
+    from sklearn.tree import plot_tree
+    import matplotlib.pyplot as plt
+
+    # 创建图形
+    fig = plt.figure(figsize=figsize)
+
+    # 绘制决策树
+    plot_tree(model,
+              feature_names=feature_names,
+              class_names=class_names,
+              max_depth=max_depth,
+              fontsize=fontsize,
+              filled=filled,
+              rounded=rounded,
+              impurity=impurity)
+
+    # 调整布局
+    plt.tight_layout()
+
+    # 保存图片
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight', dpi=300)
+
+    return fig

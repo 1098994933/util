@@ -169,7 +169,7 @@ class MultipleObjectiveOptimizationTest(unittest.TestCase):
         X2a = np.random.uniform(0, 5, 100).reshape(-1, 1)  # 模型1独特征
         X2b = np.random.uniform(-5, 0, 100).reshape(-1, 1)  # 模型2独特征
         y1 = 2 * X1 + 3 * X2a  # 线性模型
-        y2 = 1/X1 ** 2 + 4 * X2b  # 二次模型
+        y2 = 1 / X1 ** 2 + 4 * X2b  # 二次模型
 
         model1 = RandomForestRegressor()
         model1.fit(np.hstack([X1, X2a]), y1)

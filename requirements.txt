@@ -11,3 +11,6 @@ hyperopt
 plotly
 shap
 lightgbm
+xgboost
+featuretools
+pytest
