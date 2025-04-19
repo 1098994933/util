@@ -100,8 +100,8 @@ class FeatureSelector(object):
         zero_variance_cols = variance[variance == 0].index.tolist()
         x = x.drop(zero_variance_cols, axis=1)
         
-        # 计算特征间的相关系数
-        corr = abs(x.corr())
+        # 计算特征间的相关系数矩阵（只计算一次）
+        corr_matrix = abs(x.corr())
         features_names = list(x.columns)
         feature_num = x.shape[1]
         
@@ -109,32 +109,38 @@ class FeatureSelector(object):
         dropped_features = []
         
         # 设置对角线为0
-        for i in range(feature_num):
-            corr[features_names[i]][features_names[i]] = 0
-
+        np.fill_diagonal(corr_matrix.values, 0)
+        
+        # 创建特征掩码，用于跟踪哪些特征被保留
+        feature_mask = np.ones(feature_num, dtype=bool)
+        
         while True:
+            # 获取当前保留特征的相关系数矩阵
+            current_corr = corr_matrix.iloc[feature_mask, feature_mask]
+            
             # 获取最大相关系数
-            max_corr = corr.max().max()
-
-            if max_corr <= pcc or x.shape[1] < 2:
+            max_corr = current_corr.max().max()
+            
+            if max_corr <= pcc or sum(feature_mask) < 2:
                 break
-
+                
             # 找到相关系数最大的特征对
-            col1, row1 = np.where(corr == max_corr)
-            feature1 = features_names[row1[0]]
-            feature2 = features_names[col1[0]]
-
+            max_corr_idx = np.unravel_index(current_corr.values.argmax(), current_corr.shape)
+            current_features = current_corr.index.tolist()
+            feature1 = current_features[max_corr_idx[0]]
+            feature2 = current_features[max_corr_idx[1]]
+            
             # 计算与目标变量的相关性
             pcc1 = abs(pearsonr(x[feature1], y)[0])
             pcc2 = abs(pearsonr(x[feature2], y)[0])
-
+            
             if pcc1 >= pcc2:
                 keep_feature = feature1
                 drop_feature = feature2
             else:
                 keep_feature = feature2
                 drop_feature = feature1
-
+                
             # 记录被删除的特征与保留特征的关系，包括相关系数
             if keep_feature not in pcc_result:
                 pcc_result[keep_feature] = []
@@ -149,18 +155,13 @@ class FeatureSelector(object):
             })
             
             dropped_features.append(drop_feature)
-
-            # 更新数据
-            x = x.drop(drop_feature, axis=1)
-            corr = abs(x.corr())
-            feature_num = x.shape[1]
-            features_names = list(x.columns)
             
-            # 重置对角线
-            for i in range(feature_num):
-                corr[features_names[i]][features_names[i]] = 0
-
-        selected_features = list(x.columns)
+            # 更新特征掩码
+            drop_idx = features_names.index(drop_feature)
+            feature_mask[drop_idx] = False
+            
+        # 获取最终选择的特征
+        selected_features = [f for f, m in zip(features_names, feature_mask) if m]
         self.selected_features = selected_features
         
         # 更新selector_result
