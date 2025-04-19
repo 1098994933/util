@@ -62,56 +62,115 @@ class FeatureSelector(object):
 
     def select_features_by_pcc(self, x, y, selector_params=None):
         """
-        :param selector_params:
-        :param x: pd.DataFrame
-        :param y:
-        :param pcc: float < 1
-        :return:
+        使用皮尔逊相关系数进行特征选择，并记录被筛选掉的特征与保留特征的相关性
+        
+        params:
+        x: pd.DataFrame, 特征数据
+        y: pd.DataFrame, pd.Series, np.ndarray, 目标变量
+        selector_params: dict, 选择参数，包含pcc阈值
+        
+        return:
+        list: 选择的特征列表
         """
         self.select_method = "相关性筛选"
         self.select_method_name = "相关性筛选"
         if selector_params is not None:
             self.selector_params = selector_params
         pcc = self.selector_params.get('pcc', 0.95)
-        # remove no variance features
+        
+        # 确保x是DataFrame
+        if not isinstance(x, pd.DataFrame):
+            x = pd.DataFrame(x)
+            
+        # 确保y是Series
+        if isinstance(y, pd.DataFrame):
+            if y.shape[1] > 1:
+                raise ValueError("y should be a single column DataFrame")
+            y = y.iloc[:, 0]
+        elif isinstance(y, np.ndarray):
+            if len(y.shape) > 1 and y.shape[1] > 1:
+                raise ValueError("y should be a 1D array")
+            y = pd.Series(y.ravel())
+        
+        # 初始化结果字典
+        pcc_result = {}
+        
+        # 移除方差为0的特征
         variance = x.var(axis=0)
         zero_variance_cols = variance[variance == 0].index.tolist()
         x = x.drop(zero_variance_cols, axis=1)
-        # calculate abs value of corr between features
+        
+        # 计算特征间的相关系数
         corr = abs(x.corr())
         features_names = list(x.columns)
         feature_num = x.shape[1]
-        # set self.pcc == 0
+        
+        # 初始化被删除的特征列表
+        dropped_features = []
+        
+        # 设置对角线为0
         for i in range(feature_num):
             corr[features_names[i]][features_names[i]] = 0
 
         while True:
-            # get max pcc
+            # 获取最大相关系数
             max_corr = corr.max().max()
 
-            if max_corr <= pcc or x.shape[1] < 2:  # stop when only one feature
+            if max_corr <= pcc or x.shape[1] < 2:
                 break
 
-            # find the features should be deleted
+            # 找到相关系数最大的特征对
             col1, row1 = np.where(corr == max_corr)
+            feature1 = features_names[row1[0]]
+            feature2 = features_names[col1[0]]
 
-            pcc1 = abs(pearsonr(x[features_names[row1[0]]], y)[0])
-            pcc2 = abs(pearsonr(x[features_names[col1[0]]], y)[0])
+            # 计算与目标变量的相关性
+            pcc1 = abs(pearsonr(x[feature1], y)[0])
+            pcc2 = abs(pearsonr(x[feature2], y)[0])
+
             if pcc1 >= pcc2:
-                # print(pcc1, pcc2)
-                drop_feature = corr.index[col1].tolist()[0]
+                keep_feature = feature1
+                drop_feature = feature2
             else:
-                # print(pcc1, pcc2)
-                drop_feature = corr.index[row1].tolist()[0]
+                keep_feature = feature2
+                drop_feature = feature1
+
+            # 记录被删除的特征与保留特征的关系，包括相关系数
+            if keep_feature not in pcc_result:
+                pcc_result[keep_feature] = []
+            
+            # 计算相关系数并保留3位有效数字
+            correlation = float(round(x[keep_feature].corr(x[drop_feature]), 3))
+            
+            # 记录特征名和相关系数
+            pcc_result[keep_feature].append({
+                'feature': drop_feature,
+                'correlation': correlation
+            })
+            
+            dropped_features.append(drop_feature)
+
+            # 更新数据
             x = x.drop(drop_feature, axis=1)
             corr = abs(x.corr())
             feature_num = x.shape[1]
             features_names = list(x.columns)
+            
+            # 重置对角线
             for i in range(feature_num):
                 corr[features_names[i]][features_names[i]] = 0
 
         selected_features = list(x.columns)
         self.selected_features = selected_features
+        
+        # 更新selector_result
+        self.selector_result = {
+            "selected_features": selected_features,
+            "dropped_features": dropped_features,
+            "pcc_result": pcc_result,
+            "pcc_threshold": pcc
+        }
+        
         return selected_features
 
     def select_features_by_mutual_info(self, X, y):
@@ -354,3 +413,44 @@ class FeatureSelector(object):
         with open(filename, 'rb') as file:
             config = pickle.load(file)
         return config
+
+    def pcc_result_to_dataframe(self) -> pd.DataFrame:
+        """
+        将pcc_result转换为DataFrame格式
+        
+        return:
+        pd.DataFrame: 包含三列的DataFrame
+            - kept_feature: 保留的特征
+            - correlated_features: 相关的特征列表
+            - correlations: 相关系数列表
+        """
+        if not hasattr(self, 'selector_result') or 'pcc_result' not in self.selector_result:
+            raise ValueError("No pcc_result found. Please run select_features_by_pcc first.")
+            
+        pcc_result = self.selector_result['pcc_result']
+        selected_features = self.selector_result['selected_features']
+        
+        # 初始化结果列表
+        result_data = []
+        
+        # 处理每个保留特征
+        for feature in selected_features:
+            if feature in pcc_result:
+                # 获取相关特征和相关系数
+                correlated_features = [item['feature'] for item in pcc_result[feature]]
+                correlations = [item['correlation'] for item in pcc_result[feature]]
+            else:
+                # 如果没有相关特征，使用空列表
+                correlated_features = []
+                correlations = []
+                
+            result_data.append({
+                'kept_feature': feature,
+                'correlated_features': correlated_features,
+                'correlations': correlations
+            })
+        
+        # 创建DataFrame
+        df = pd.DataFrame(result_data)
+        
+        return df

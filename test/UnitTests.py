@@ -9,6 +9,9 @@ from ..plot import plot_regression_results, plot_corr, plot_feature_importance
 import matplotlib.pyplot as plt
 
 class MlTest(unittest.TestCase):
+    def setUp(self):
+        pass
+
     def test_cal_metric(self):
         y_true = [1, 2, 3, 4]
         y_predict = [1, 2, 3, 4]
