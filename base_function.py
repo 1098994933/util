@@ -12,21 +12,7 @@ import os
 root_path = os.path.abspath(os.path.dirname(__file__))
 
 
-def draw_feature_importance(feature, feature_importance):
-    """
-    features: name
-    feature_importance:
-    """
-    # make importance relative to max importance
-    feature_importance = 100.0 * (feature_importance / feature_importance.max())
-    sorted_idx = np.argsort(feature_importance)
-    pos = np.arange(sorted_idx.shape[0]) + .5
-    fig = plt.figure(dpi=400)
-    plt.barh(pos, list(feature_importance[sorted_idx]), align='center')
-    plt.yticks(pos, list(feature[sorted_idx]), fontsize=6)
-    plt.xlabel('Relative Importance')
-    plt.title('Feature Importance')
-    plt.show()
+
 
 
 def mean_relative_error(y_true, y_pred):
