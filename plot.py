@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from scipy.interpolate import griddata
 
 mpl.rcParams['font.sans-serif'] = ['SimHei']  # 显示中文
 mpl.rcParams['axes.unicode_minus'] = False  # 显示负号
@@ -412,3 +413,137 @@ def plot_decision_tree(model, feature_names=None, class_names=None, save_path=No
         plt.savefig(save_path, bbox_inches='tight', dpi=300)
 
     return fig
+
+
+def process_1d_vectors(x, y, z, resolution=50):
+    """
+    将一维向量形式的三维数据转换为二维网格数据
+
+    参数:
+        x, y, z: 一维向量数据
+        resolution: 生成网格的分辨率
+
+    返回:
+        X, Y: 二维网格坐标
+        Z: 插值后的二维网格数据
+    """
+    # 创建网格
+    xi = np.linspace(min(x), max(x), resolution)
+    yi = np.linspace(min(y), max(y), resolution)
+    X, Y = np.meshgrid(xi, yi)
+
+    # 使用线性插值填充网格
+    Z = griddata((x, y), z, (X, Y), method='cubic')
+
+    return X, Y, Z
+
+
+def plot_grouped_contour(x, y, z, groups=None, resolution=50, levels=20, cmap="jet",
+                         figsize=(15, 10), title="分组等高线图", share_colorbar=True):
+    """
+    contour by groups，所有子图共享相同的colorbar范围
+
+    参数:
+        x, y, z: 一维向量数据或pandas Series
+        groups: 一维向量，指定每个数据点的分组
+        resolution: 网格分辨率
+        levels: 等高线数量
+        cmap: 颜色映射
+        figsize: 图表大小
+        title: 总标题
+        share_colorbar: 是否共享colorbar范围
+    """
+
+    # 获取Series的名称作为坐标轴标签
+    x_label = x.name if isinstance(x, pd.Series) and x.name is not None else 'X轴'
+    y_label = y.name if isinstance(y, pd.Series) and y.name is not None else 'Y轴'
+    z_label = z.name if isinstance(z, pd.Series) and z.name is not None else 'Z值'
+
+    # 转换为numpy数组进行处理
+    x = np.asarray(x)
+    y = np.asarray(y)
+    z = np.asarray(z)
+    if groups is not None:
+        groups = np.asarray(groups)
+    else:
+        groups = np.zeros(len(x))
+    # 获取唯一的分组
+    unique_groups = np.unique(groups)
+    n_groups = len(unique_groups)
+
+    # 计算行列数，使子图布局尽量接近正方形
+    n_cols = int(np.ceil(np.sqrt(n_groups)))
+    n_rows = int(np.ceil(n_groups / n_cols))
+
+    # 创建图形和子图
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize,
+                             sharex=True, sharey=True,
+                             squeeze=False)
+
+    # 如果需要共享colorbar，计算全局的Z值范围
+    if share_colorbar:
+        global_vmin = np.min(z)
+        global_vmax = np.max(z)
+    else:
+        global_vmin = None
+        global_vmax = None
+
+    # 绘制每个分组的等高线图
+    for i, group in enumerate(unique_groups):
+        # 获取当前组的数据
+        mask = groups == group
+        group_x = x[mask]
+        group_y = y[mask]
+        group_z = z[mask]
+
+        # 转换为网格数据
+        X, Y, Z = process_1d_vectors(group_x, group_y, group_z, resolution=resolution)
+
+        # 计算子图位置
+        row = i // n_cols
+        col = i % n_cols
+        ax = axes[row, col]
+
+        # set vmin 和 vmax
+        if share_colorbar:
+            vmin, vmax = global_vmin, global_vmax
+        else:
+            vmin, vmax = np.min(group_z), np.max(group_z)
+
+        # 绘制等高线图
+        contour = ax.contourf(X, Y, Z, levels=levels, cmap=cmap, alpha=0.8,
+                              vmin=vmin, vmax=vmax)
+
+        # 添加等高线线条
+        contour_lines = ax.contour(X, Y, Z, levels=levels, colors='black', linewidths=0.5)
+
+        # 添加等高线标签
+        ax.clabel(contour_lines, inline=True, fontsize=8)
+
+        # 设置子图标题
+        ax.set_title(f"{group}", fontsize=14)
+
+        # 设置网格线
+        ax.grid(True, linestyle='--', alpha=0.7)
+        ax.set_xlabel(x_label, fontsize=12)
+        ax.set_ylabel(y_label, fontsize=12)
+
+    # 隐藏空的子图
+    for i in range(n_groups, n_rows * n_cols):
+        row = i // n_cols
+        col = i % n_cols
+        axes[row, col].axis('off')
+
+    # 添加总标题
+    fig.suptitle(title, fontsize=18, y=0.95)
+
+    # 添加共享的colorbar
+    if share_colorbar:
+        cbar_ax = fig.add_axes((0.92, 0.15, 0.02, 0.7))  # [左, 下, 宽, 高]
+        cbar = fig.colorbar(contour, cax=cbar_ax)
+        cbar.set_label(z_label, fontsize=12)
+
+    # 调整布局
+    plt.tight_layout(rect=(0.0, 0.0, 0.9, 1.0))  # 为colorbar留出空间
+
+    return fig, axes
