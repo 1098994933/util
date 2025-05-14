@@ -76,6 +76,7 @@ def formula_to_ratio_dataset(dataset):
     df_ratio = df_ratio.fillna(0).reset_index(drop=True)
     dataset_reindex = dataset.reset_index(drop=True)
     df_all = pd.concat([dataset_reindex, df_ratio], axis=1)
+    df_all.columns = [str(col) for col in df_all.columns]  # 防止np.str_导致报错
     element_columns = list(df_ratio.columns)
     return df_all, element_columns
 
