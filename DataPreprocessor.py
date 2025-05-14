@@ -87,3 +87,42 @@ class DataPreprocessor(object):
             print(f"加载预处理器时出现错误: {e}")
             return None
 
+    @staticmethod
+    def delete_outliers_y(df: pd.DataFrame, y_col):
+        """
+        delete outliers with 3 sigma rule
+        return df_clean
+        """
+        mean = df[y_col].mean()
+        std = df[y_col].std()
+        lower_bound = mean - 3 * std
+        upper_bound = mean + 3 * std
+
+        is_outlier = (df[y_col] < lower_bound) | (df[y_col] > upper_bound)
+
+        deleted_count = is_outlier.sum()
+        df_clean = df[~is_outlier].copy()
+
+        print(f"delete {deleted_count} outlier not in [{lower_bound},{upper_bound}]")
+        return df_clean
+
+
+class TestDataPreprocessor(unittest.TestCase):
+    def setUp(self):
+        self.df = pd.DataFrame({
+            'str_col': ['a', 'b', 'c', 'd', 'e'],
+            'int_col': [1, 2, 3, 4, 5],
+            'float_col': [1.1, 2.2, 3.3, 4.4, 5.5],
+            'missing_col': [1, 2, None, 4, 5],
+            'y_col': [1, 2, 3, 4, 5]
+        })
+        self.preprocessor = DataPreprocessor()
+
+    def test_delete_outliers_y(self):
+        data = {'y': [1, 2, 3, 4, 5, 6, 7, 0, -9, 8, 8, 150]}  # 100 是异常值
+        df = pd.DataFrame(data)
+
+        result = self.preprocessor.delete_outliers_y(df, 'y')
+        print(result)
+
+
