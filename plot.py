@@ -496,29 +496,54 @@ def plot_grouped_contour(x, y, z, groups=None, resolution=50, levels=20, cmap="j
         group_y = y[mask]
         group_z = z[mask]
 
-        # 转换为网格数据
-        X, Y, Z = process_1d_vectors(group_x, group_y, group_z, resolution=resolution)
-
         # 计算子图位置
         row = i // n_cols
         col = i % n_cols
         ax = axes[row, col]
 
-        # set vmin 和 vmax
-        if share_colorbar:
-            vmin, vmax = global_vmin, global_vmax
+        # 检查x, y, z是否为常数
+        x_is_constant = max(group_x) - min(group_x) < 1e-6
+        y_is_constant = max(group_y) - min(group_y) < 1e-6
+        z_is_constant = max(group_z) - min(group_z) < 1e-6
+
+        if x_is_constant or y_is_constant or z_is_constant:
+            # 如果任一维度为常数，创建散点图
+            scatter = ax.scatter(group_x, group_y, c=group_z, 
+                               cmap=cmap, 
+                               vmin=global_vmin if share_colorbar else min(group_z),
+                               vmax=global_vmax if share_colorbar else max(group_z))
+            
+            # 添加常数值标注
+            if x_is_constant:
+                ax.text(0.02, 0.98, f'X = {group_x[0]:.2f}', 
+                       transform=ax.transAxes, va='top')
+            if y_is_constant:
+                ax.text(0.02, 0.93, f'Y = {group_y[0]:.2f}', 
+                       transform=ax.transAxes, va='top')
+            if z_is_constant:
+                ax.text(0.02, 0.88, f'Z = {group_z[0]:.2f}', 
+                       transform=ax.transAxes, va='top')
+            
+            contour = scatter  # 为了后面的colorbar
         else:
-            vmin, vmax = np.min(group_z), np.max(group_z)
+            # 转换为网格数据
+            X, Y, Z = process_1d_vectors(group_x, group_y, group_z, resolution=resolution)
 
-        # 绘制等高线图
-        contour = ax.contourf(X, Y, Z, levels=levels, cmap=cmap, alpha=0.8,
-                              vmin=vmin, vmax=vmax)
+            # set vmin 和 vmax
+            if share_colorbar:
+                vmin, vmax = global_vmin, global_vmax
+            else:
+                vmin, vmax = np.min(group_z), np.max(group_z)
 
-        # 添加等高线线条
-        contour_lines = ax.contour(X, Y, Z, levels=levels, colors='black', linewidths=0.5)
+            # 绘制等高线图
+            contour = ax.contourf(X, Y, Z, levels=levels, cmap=cmap, alpha=0.8,
+                                  vmin=vmin, vmax=vmax)
 
-        # 添加等高线标签
-        ax.clabel(contour_lines, inline=True, fontsize=8)
+            # 添加等高线线条
+            contour_lines = ax.contour(X, Y, Z, levels=levels, colors='black', linewidths=0.5)
+
+            # 添加等高线标签
+            ax.clabel(contour_lines, inline=True, fontsize=8)
 
         # 设置子图标题
         ax.set_title(f"{group}", fontsize=14)
