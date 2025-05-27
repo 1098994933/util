@@ -439,7 +439,7 @@ def process_1d_vectors(x, y, z, resolution=50):
 
 
 def plot_grouped_contour(x, y, z, groups=None, resolution=50, levels=20, cmap="jet",
-                         figsize=(15, 10), title="分组等高线图", share_colorbar=True):
+                         figsize=(15, 10), title="", share_colorbar=True):
     """
     contour by groups，所有子图共享相同的colorbar范围
 
@@ -463,6 +463,10 @@ def plot_grouped_contour(x, y, z, groups=None, resolution=50, levels=20, cmap="j
     x = np.asarray(x)
     y = np.asarray(y)
     z = np.asarray(z)
+    # 计算全局z范围
+    z_min, z_max = np.nanmin(z), np.nanmax(z)
+    if isinstance(levels, int):
+        levels = np.linspace(z_min, z_max, levels)
     if groups is not None:
         groups = np.asarray(groups)
     else:
