@@ -3,72 +3,117 @@ subgroup discovery by category
 """
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.datasets import make_regression
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import cross_val_predict
+from typing import List, Dict, Tuple
+from common.DataUtil import split_dataset_by_dimensions
+from eval import cal_reg_metric
 
-# 生成模拟数据（10000样本，包含分类和数值特征）
-np.random.seed(42)
-data = {
-    'region': np.random.choice(['North', 'South', 'East', 'West'], 10000),  # 分类变量
-    'product_type': np.random.choice(['Electronics', 'Clothing', 'Books'], 10000),
-    'user_age': np.random.randint(18, 65, 10000),  # 数值变量
-    'browsing_time': np.random.normal(30, 10, 10000).astype(int),
-    'purchase_amount': np.abs(np.random.normal(500, 200, 10000))  # 因变量（需预测的数值）
-}
-df = pd.DataFrame(data)
 
-# 独热编码分类变量
-encoder = OneHotEncoder()
-cat_features = encoder.fit_transform(df[['region', 'product_type']])
-#
-numeric_features = ['user_age', 'browsing_time']
-df_cat = pd.DataFrame(cat_features.toarray(), columns=encoder.get_feature_names_out())
-df_encoded = pd.concat([df[numeric_features], df_cat], axis=1)
+def subgroup_discovery_by_dimensions(df: pd.DataFrame, dimension_cols: List[str], feature_cols: List[str], target_col: str, min_samples: int = 30,
+                                     cv_folder: int = 5) -> List[Dict]:
+    """
+    分析数据集中不同维度组合下的子群表现
+    
+    Args:
+        df: 输入的数据集
+        dimension_cols: 维度列名列表（字符串类型）
+        feature_cols: 特征列名列表（数值类型）
+        target_col: 目标列名
+        min_samples: 最小样本数要求
+        cv_folder: 交叉验证折数
+        
+    Returns:
+        List[Dict]: 包含每个子群分析结果的列表，按最大R2降序排序
+    """
+    # 1. 对分类变量进行独热编码
+    encoder = OneHotEncoder(sparse_output=False)
+    cat_features = encoder.fit_transform(df[dimension_cols])
+    cat_feature_names = encoder.get_feature_names_out(dimension_cols)
 
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
+    # 2. 准备特征矩阵
+    X = pd.concat([df[feature_cols], pd.DataFrame(cat_features, columns=cat_feature_names)], axis=1)
+    y = df[target_col]
 
-X = df_encoded
-y = df['purchase_amount']
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    # 3. 使用随机森林和决策树进行特征重要性分析
+    models = {'rf': RandomForestRegressor(n_estimators=100, random_state=42), 'dt': DecisionTreeRegressor(random_state=42)}
 
-# 拟合全局模型
-rf_global = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42)
-rf_global.fit(X_train, y_train)
-print(f"全局模型R²：{rf_global.score(X_test, y_test):.3f}")  # 示例输出：0.782
+    # 4. 获取特征重要性
+    importance_scores = {}
+    for name, model in models.items():
+        model.fit(X, y)
+        importance_scores[name] = dict(zip(X.columns, model.feature_importances_))
 
-import matplotlib.pyplot as plt
+    # 5. 选择重要性最高的维度（最多3个）
+    avg_importance = {}
+    for feature in cat_feature_names:
+        avg_importance[feature] = np.mean([scores[feature] for scores in importance_scores.values()])
 
-# 获取特征重要性（参考网页7、8的基尼指数方法）
-importance = rf_global.feature_importances_
-features = X_train.columns
-plt.barh(features, importance)
-plt.title("feature importance")
-plt.show()
+    sorted_dimensions = sorted(avg_importance.items(), key=lambda x: x[1], reverse=True)
+    print("Sorted Dimensions:", sorted_dimensions)
 
-# 筛选重要性前2的分类变量（示例假设为region_North和product_type_Electronics）
-selected_cat = ['region_North', 'product_type_Electronics']
+    # 选择前三个重要维度
+    top_dimensions = []
+    seen_dimensions = set()
+    for dim, importance in sorted_dimensions:
+        if len(top_dimensions) >= 3:
+            break
+        # 获取原始维度名称
+        original_dim = None
+        for orig_dim in dimension_cols:
+            if dim.startswith(orig_dim):
+                original_dim = orig_dim
+                break
+        if original_dim and original_dim not in seen_dimensions:
+            top_dimensions.append(original_dim)
+            seen_dimensions.add(original_dim)
+    
+    print(f"Top dimensions: {top_dimensions}")
 
-# 定义高潜力子群规则（例如：北方地区 & 电子产品）
-subgroup_mask = (df['region'] == 'North') & (df['product_type'] == 'Electronics')
-subgroup_data = df[subgroup_mask]
-from itertools import product
+    selected_dims = list(set(top_dimensions))  # 去重
+    print("Selected Dimensions:", selected_dims)
 
-# 自动遍历重要分类变量组合
-regions = df['region'].unique()
-products = df['product_type'].unique()
+    # 6. 使用选定的维度进行子群分析
+    results = []
+    for dim_dict, subgroup_df in split_dataset_by_dimensions(df, selected_dims):
+        if len(subgroup_df) < min_samples:
+            continue
 
-for region, product in product(regions, products):
-    mask = (df['region'] == region) & (df['product_type'] == product)
-    if sum(mask) < 500:  # 过滤样本量过小的子群
-        continue
-    subgroup_data = df[mask]
-    # 拆分训练集
-    X_sub = subgroup_data[numeric_features]  # 仅使用数值特征
-    y_sub = subgroup_data['purchase_amount']
-    X_train_sub, X_test_sub, y_train_sub, y_test_sub = train_test_split(X_sub, y_sub, test_size=0.3)
+        # 准备子群数据
+        X_sub = subgroup_df[feature_cols]
+        y_sub = subgroup_df[target_col]
 
-    # 调优参数
-    rf_subgroup = RandomForestRegressor(n_estimators=150, max_depth=8, min_samples_leaf=20)
-    rf_subgroup.fit(X_train_sub, y_train_sub)
-    print(f"{region} {product} R²: {rf_subgroup.score(X_test_sub, y_test_sub):.3f} ")
+        # 使用交叉验证预测和评估模型性能
+        cv_scores = {}
+
+        # 随机森林和决策树模型
+        for name, model in models.items():
+            y_predict = cross_val_predict(model, X_sub, y_sub, cv=cv_folder)
+            metrics = cal_reg_metric(y_sub, y_predict)
+            cv_scores[name] = metrics
+
+        # 线性回归模型（使用Pipeline进行标准化）
+        lr_pipeline = Pipeline([('scaler', StandardScaler()), ('lr', LinearRegression())])
+        y_predict = cross_val_predict(lr_pipeline, X_sub, y_sub, cv=cv_folder)
+        metrics = cal_reg_metric(y_sub, y_predict)
+        cv_scores['lr'] = metrics
+
+        # 记录结果
+        result = {
+            'dimensions': dim_dict,
+            'sample_size': len(subgroup_df),
+            'rf_metrics': cv_scores['rf'],
+            'dt_metrics': cv_scores['dt'],
+            'lr_metrics': cv_scores['lr'],
+            'max_r2': float(np.max([scores['R2'] for scores in cv_scores.values()]))
+        }
+        results.append(result)
+
+    # 7. 按最大R2降序排序结果
+    results.sort(key=lambda x: x['max_r2'], reverse=True)
+
+    return results
