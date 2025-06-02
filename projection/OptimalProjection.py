@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 class OptimalProjection(object):
     """
     OptimalProjection: get the best projection from multiple projections
-    最佳投影算法：回归的话就是y大于平均为优类样本，否则需要指定优类样本的值,使用网格找到最优矩形区域
+    最佳优化区识别算法：回归的话就是y大于平均为优类样本，否则需要指定优类样本的值,使用网格找到最优矩形区域
     算法复杂度O(P), P为投影个数
     """
 
@@ -73,7 +73,7 @@ class OptimalProjection(object):
         best_index = 0
         best_product = 0
 
-        num_grids = 10  # 可以调整网格数量
+        num_grids = 20  # 可以调整网格数量
 
         for i, projection in enumerate(self.projections):
             x_min, x_max = np.min(projection[:, 0]), np.max(projection[:, 0])
