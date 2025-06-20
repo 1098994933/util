@@ -25,9 +25,11 @@ def cal_reg_metric(y_true, y_predict):
     RMSE = pow(MSE, 0.5)
     MAE = mean_absolute_error(y_true, y_predict)
     R2 = r2_score(y_true, y_predict)
-    pccs = pearsonr(y_true, y_predict)[0]
-    return dict({"n_samples": n, "MSE": MSE, "RMSE": RMSE, "MAE": MAE, "R2": R2, 'R': pccs,
-                 })
+    if np.std(y_true) == 0 or np.std(y_predict) == 0:
+        pccs = 0.0
+    else:
+        pccs = pearsonr(y_true, y_predict)[0]
+    return dict({"n_samples": n, "MSE": MSE, "RMSE": RMSE, "MAE": MAE, "R2": R2, 'R': pccs})
 
 
 def cal_cls_metric(y_true, y_pred):
