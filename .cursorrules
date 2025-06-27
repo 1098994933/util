@@ -1,0 +1,30 @@
+{
+    "test_file_naming": {
+        "pattern": "*Tests.py",
+        "description": "测试文件必须以Tests.py结尾，例如：DataUtilTests.py, ModelTests.py"
+    },
+    "test_framework": {
+        "required": "unittest",
+        "description": "必须使用Python的unittest框架进行测试"
+    },
+    "test_class_naming": {
+        "pattern": "Test*",
+        "description": "测试类名必须以Test开头，例如：TestDataUtil, TestModel"
+    },
+    "test_method_naming": {
+        "pattern": "test_*",
+        "description": "测试方法名必须以test_开头，例如：test_format_float, test_split_dataset"
+    },
+    "test_file_structure": {
+        "required_imports": [
+            "import unittest",
+            "import numpy as np",
+            "import pandas as pd"
+        ],
+        "description": "测试文件必须包含必要的导入语句"
+    },
+    "test_documentation": {
+        "required": true,
+        "description": "测试类和方法必须包含文档字符串，说明测试目的"
+    }
+}

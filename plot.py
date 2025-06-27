@@ -10,12 +10,13 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
-
+from typing import Tuple
+import warnings
 mpl.rcParams['font.sans-serif'] = ['SimHei']  # 显示中文
 mpl.rcParams['axes.unicode_minus'] = False  # 显示负号
 
 
-def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predict=None,
+def plot_regression_results(y_test, y_test_predict, y_train=None, y_train_predict=None,
                             x_label="Measured", y_label="Predicted", title=None,
                             figure_size=(7, 5), alpha_test=0.4, alpha_train=0.4,
                             legend_loc='best', grid_style="--", save_path=None,
@@ -24,9 +25,9 @@ def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predic
     Plot regression results comparing measured and predicted values.
 
     Parameters:
-        Y_test (list or array): Actual values for the test set.
+        y_test (list or array): Actual values for the test set.
         y_test_predict (list or array): Predicted values for the test set.
-        Y_train (list or array, optional): Actual values for the training set. Default is None.
+        y_train (list or array, optional): Actual values for the training set. Default is None.
         y_train_predict (list or array, optional): Predicted values for the training set. Default is None.
         x_label (str): Label for the x-axis. Default is "Measured".
         y_label (str): Label for the y-axis. Default is "Predicted".
@@ -42,9 +43,9 @@ def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predic
     """
 
     # Calculate plot limits
-    all_values = [Y_test, y_test_predict]
-    if Y_train is not None and y_train_predict is not None:
-        all_values.extend([Y_train, y_train_predict])
+    all_values = [y_test, y_test_predict]
+    if y_train is not None and y_train_predict is not None:
+        all_values.extend([y_train, y_train_predict])
 
     # 计算全局最小值和最大值
     global_min = min(min(v) for v in all_values)
@@ -68,9 +69,9 @@ def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predic
     plt.figure(figsize=figure_size)
     plt.grid(linestyle=grid_style)
     # Scatter plots
-    plt.scatter(Y_test, y_test_predict, color='red', alpha=alpha_test, label='Test')
-    if Y_train is not None and y_train_predict is not None:
-        plt.scatter(Y_train, y_train_predict, color='blue', alpha=alpha_train, label='Train')
+    plt.scatter(y_test, y_test_predict, color='red', alpha=alpha_test, label='Test')
+    if y_train is not None and y_train_predict is not None:
+        plt.scatter(y_train, y_train_predict, color='blue', alpha=alpha_train, label='Train')
 
     # Plot y = x line
     plt.plot([lim_min, lim_max], [lim_min, lim_max], color='blue')
@@ -101,7 +102,7 @@ def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predic
     if title:
         plt.title(title, fontsize=14, fontweight='bold')
     # Add legend
-    if Y_train is not None and y_train_predict is not None:
+    if y_train is not None and y_train_predict is not None:
         plt.legend(loc=legend_loc)
     # Save the plot if a path is provided
     if save_path:
@@ -109,14 +110,14 @@ def plot_regression_results(Y_test, y_test_predict, Y_train=None, y_train_predic
 
     # Optionally label each point with its index
     if plot_test_index:
-        for i, (x, y) in enumerate(zip(Y_test, y_test_predict)):
+        for i, (x, y) in enumerate(zip(y_test, y_test_predict)):
             plt.text(x, y, f'{i}', fontsize=8, ha='right', va='bottom', color='black')
 
     # Show plot
     plt.show()
 
 
-def plot_corr(dataset: pd.DataFrame, targets, save_path=None, title=None, figsize=None):
+def plot_corr(dataset: pd.DataFrame, targets: list, save_path: Optional[str] = None, title: Optional[str] = None, figsize: Optional[tuple] = None) -> pd.DataFrame:
     """
     绘制特征相关性热力图
 
@@ -187,19 +188,15 @@ def plot_corr(dataset: pd.DataFrame, targets, save_path=None, title=None, figsiz
     return corr_matrix
 
 
-from typing import Tuple
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import warnings
+
 
 
 def plot_feature_importance(
         features: list,
         feature_importance: np.ndarray,
         n: int = 10,
-        save_path: str = None,
-        figsize: tuple = None,
+        save_path: Optional[str] = None,
+        figsize: Optional[tuple] = None,
         color_map: str = 'viridis',
         show_values: bool = True
 ) -> Tuple[pd.DataFrame, plt.Figure]:
@@ -545,11 +542,6 @@ def plot_grouped_contour(x, y, z, groups=None, resolution=50, levels=20, cmap="j
             if if_scatter:
                 # 空心散点图
                 ax.scatter(group_x, group_y, s=10, alpha=0.3, facecolors='none', edgecolors='black')
-            # 添加等高线线条
-            contour_lines = ax.contour(X, Y, Z, levels=levels, colors='black', linewidths=0.5)
-
-            # 添加等高线标签
-            ax.clabel(contour_lines, inline=True, fontsize=8)
 
         # 设置子图标题
         ax.set_title(f"{group}", fontsize=14)

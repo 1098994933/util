@@ -155,3 +155,4 @@ def format_float(obj: Union[pd.DataFrame, Dict, List, np.ndarray, float], n: int
     else:
         # 其他类型直接返回
         return obj
+
