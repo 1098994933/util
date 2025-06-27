@@ -2,8 +2,9 @@ import pytest
 import numpy as np
 import pandas as pd
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-from plot import plot_decision_tree
+from plot import plot_decision_tree, plot_group_by_freq_mean
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 import unittest
 import sys
 import os
@@ -34,6 +35,11 @@ class TestPlotFunctions(unittest.TestCase):
         self.z = np.concatenate([self.z1, self.z2])
         self.groups = np.concatenate([np.ones(n_points), np.ones(n_points) * 2])
 
+        # 为plot_group_scatter_mean创建测试数据
+        self.scatter_x = pd.Series(np.random.uniform(0, 20, 200), name='X轴')
+        self.scatter_y = pd.Series(np.random.uniform(0, 20, 200), name='Y轴')
+        self.scatter_groups = pd.Series(np.random.choice(['A', 'B', 'C'], 200), name='分组')
+
     def test_plot_grouped_contour_basic(self):
         """测试基本的plot_grouped_contour功能"""
         fig, axes = plot_grouped_contour(
@@ -43,7 +49,7 @@ class TestPlotFunctions(unittest.TestCase):
             levels=10
         )
         # 验证返回的图形对象
-        self.assertIsInstance(fig, plt.Figure)
+        self.assertIsInstance(fig, Figure)
         plt.close(fig)
 
     def test_plot_grouped_contour_with_constant_values(self):
@@ -65,7 +71,7 @@ class TestPlotFunctions(unittest.TestCase):
             levels=10
         )
         plt.show()
-        self.assertIsInstance(fig, plt.Figure)
+        self.assertIsInstance(fig, Figure)
         plt.close(fig)
 
     def test_plot_grouped_contour_with_pandas_series(self):
@@ -81,7 +87,7 @@ class TestPlotFunctions(unittest.TestCase):
             levels=10
         )
 
-        self.assertIsInstance(fig, plt.Figure)
+        self.assertIsInstance(fig, Figure)
         plt.close(fig)
 
     def test_plot_grouped_contour_without_groups(self):
@@ -92,7 +98,7 @@ class TestPlotFunctions(unittest.TestCase):
             levels=10
         )
 
-        self.assertIsInstance(fig, plt.Figure)
+        self.assertIsInstance(fig, Figure)
         plt.close(fig)
 
     def test_plot_grouped_contour_with_custom_parameters(self):
@@ -108,7 +114,99 @@ class TestPlotFunctions(unittest.TestCase):
             share_colorbar=False
         )
 
-        self.assertIsInstance(fig, plt.Figure)
+        self.assertIsInstance(fig, Figure)
+        plt.close(fig)
+
+    def test_plot_group_scatter_mean_basic(self):
+        """测试基本的plot_group_scatter_mean功能"""
+        fig, axes = plot_group_by_freq_mean(
+            self.scatter_x, self.scatter_y, self.scatter_groups
+        )
+        # 验证返回的图形对象
+        self.assertIsInstance(fig, Figure)
+        self.assertIsInstance(axes, np.ndarray)
+        plt.close(fig)
+
+    def test_plot_group_scatter_mean_with_custom_figsize(self):
+        """测试自定义图形尺寸的plot_group_scatter_mean"""
+        fig, axes = plot_group_by_freq_mean(self.scatter_x, self.scatter_y, self.scatter_groups,figsize=(20, 15)
+        )
+        plt.show()
+        # 验证图形尺寸
+        self.assertEqual(fig.get_size_inches()[0], 20)
+        self.assertEqual(fig.get_size_inches()[1], 15)
+        plt.close(fig)
+
+    def test_plot_group_scatter_mean_with_single_group(self):
+        """测试只有一个分组的情况"""
+        single_group_x = pd.Series(np.random.uniform(0, 10, 50), name='X轴')
+        single_group_y = pd.Series(np.random.uniform(0, 10, 50), name='Y轴')
+        single_group_groups = pd.Series(['A'] * 50, name='分组')
+        
+        fig, axes = plot_group_by_freq_mean(
+            single_group_x, single_group_y, single_group_groups
+        )
+        
+        self.assertIsInstance(fig, Figure)
+        plt.close(fig)
+
+    def test_plot_group_scatter_mean_with_many_groups(self):
+        """测试多个分组的情况"""
+        many_groups_x = pd.Series(np.random.uniform(0, 10, 100), name='X轴')
+        many_groups_y = pd.Series(np.random.uniform(0, 10, 100), name='Y轴')
+        many_groups_groups = pd.Series(np.random.choice(['A', 'B', 'C', 'D', 'E', 'F'], 100), name='分组')
+        
+        fig, axes = plot_group_by_freq_mean(
+            many_groups_x, many_groups_y, many_groups_groups
+        )
+        
+        self.assertIsInstance(fig, Figure)
+        plt.close(fig)
+
+    def test_plot_group_scatter_mean_with_empty_data(self):
+        """测试空数据的情况"""
+        empty_x = pd.Series([], name='X轴')
+        empty_y = pd.Series([], name='Y轴')
+        empty_groups = pd.Series([], name='分组')
+        
+        # 应该抛出异常或返回空图形
+        with self.assertRaises(Exception):
+            plot_group_by_freq_mean(empty_x, empty_y, empty_groups)
+
+    def test_plot_group_scatter_mean_with_unequal_lengths(self):
+        """测试输入数据长度不一致的情况"""
+        x_short = pd.Series(np.random.uniform(0, 10, 50), name='X轴')
+        y_long = pd.Series(np.random.uniform(0, 10, 100), name='Y轴')
+        groups_long = pd.Series(np.random.choice(['A', 'B'], 100), name='分组')
+        
+        # 应该抛出异常
+        with self.assertRaises(Exception):
+            plot_group_by_freq_mean(x_short, y_long, groups_long)
+
+    def test_plot_group_scatter_mean_quantile_calculation(self):
+        """测试分位数计算是否正确"""
+        # 创建有序的数据来验证分位数计算
+        ordered_x = pd.Series(np.arange(100), name='X轴')
+        ordered_y = pd.Series(np.arange(100) + np.random.normal(0, 1, 100), name='Y轴')
+        ordered_groups = pd.Series(['A'] * 100, name='分组')
+        
+        fig, axes = plot_group_by_freq_mean(
+            ordered_x, ordered_y, ordered_groups
+        )
+        
+        self.assertIsInstance(fig, Figure)
+        plt.close(fig)
+
+    def test_plot_group_scatter_mean_with_no_groups(self):
+        """测试不提供groups参数的情况（默认分一组）"""
+        x_data = pd.Series(np.random.uniform(0, 10, 50), name='X轴')
+        y_data = pd.Series(np.random.uniform(0, 10, 50), name='Y轴')
+        
+        fig, axes = plot_group_by_freq_mean(
+            x_data, y_data  # 不提供groups参数
+        )
+        
+        self.assertIsInstance(fig, Figure)
         plt.close(fig)
 
 

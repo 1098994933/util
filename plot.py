@@ -2,7 +2,7 @@
 functions of plot figures
 """
 import warnings
-from typing import List
+from typing import List, Optional
 
 from matplotlib.pylab import mpl
 import pandas as pd
@@ -439,7 +439,7 @@ def process_1d_vectors(x, y, z, resolution=50):
 
 
 def plot_grouped_contour(x, y, z, groups=None, resolution=50, levels=20, cmap="jet",
-                         figsize=(15, 10), title="", share_colorbar=True):
+                         figsize=(15, 10), title="", share_colorbar=True, if_scatter=True):
     """
     contour by groups，所有子图共享相同的colorbar范围
 
@@ -512,22 +512,22 @@ def plot_grouped_contour(x, y, z, groups=None, resolution=50, levels=20, cmap="j
 
         if x_is_constant or y_is_constant or z_is_constant:
             # 如果任一维度为常数，创建散点图
-            scatter = ax.scatter(group_x, group_y, c=group_z, 
-                               cmap=cmap, 
-                               vmin=global_vmin if share_colorbar else min(group_z),
-                               vmax=global_vmax if share_colorbar else max(group_z))
-            
+            scatter = ax.scatter(group_x, group_y, c=group_z,
+                                 cmap=cmap,
+                                 vmin=global_vmin if share_colorbar else min(group_z),
+                                 vmax=global_vmax if share_colorbar else max(group_z))
+
             # 添加常数值标注
             if x_is_constant:
-                ax.text(0.02, 0.98, f'X = {group_x[0]:.2f}', 
-                       transform=ax.transAxes, va='top')
+                ax.text(0.02, 0.98, f'X = {group_x[0]:.2f}',
+                        transform=ax.transAxes, va='top')
             if y_is_constant:
-                ax.text(0.02, 0.93, f'Y = {group_y[0]:.2f}', 
-                       transform=ax.transAxes, va='top')
+                ax.text(0.02, 0.93, f'Y = {group_y[0]:.2f}',
+                        transform=ax.transAxes, va='top')
             if z_is_constant:
-                ax.text(0.02, 0.88, f'Z = {group_z[0]:.2f}', 
-                       transform=ax.transAxes, va='top')
-            
+                ax.text(0.02, 0.88, f'Z = {group_z[0]:.2f}',
+                        transform=ax.transAxes, va='top')
+
             contour = scatter  # 为了后面的colorbar
         else:
             # 转换为网格数据
@@ -542,7 +542,9 @@ def plot_grouped_contour(x, y, z, groups=None, resolution=50, levels=20, cmap="j
             # 绘制等高线图
             contour = ax.contourf(X, Y, Z, levels=levels, cmap=cmap, alpha=0.8,
                                   vmin=vmin, vmax=vmax)
-
+            if if_scatter:
+                # 空心散点图
+                ax.scatter(group_x, group_y, s=10, alpha=0.3, facecolors='none', edgecolors='black')
             # 添加等高线线条
             contour_lines = ax.contour(X, Y, Z, levels=levels, colors='black', linewidths=0.5)
 
@@ -574,5 +576,88 @@ def plot_grouped_contour(x, y, z, groups=None, resolution=50, levels=20, cmap="j
 
     # 调整布局
     plt.tight_layout(rect=(0.0, 0.0, 0.9, 1.0))  # 为colorbar留出空间
+
+    return fig, axes
+
+
+def plot_group_by_freq_mean(x: pd.Series, y: pd.Series, groups: Optional[pd.Series] = None, figsize=(15, 10), title=None):
+    """
+    对x和y进行分组，并绘制，每个分组的x y 按照x的大小等频率分组，每个分组绘制一个，每个分组的x y
+    
+    参数:
+        x: pd.Series - X轴数据
+        y: pd.Series - Y轴数据
+        groups: pd.Series, optional - 分组数据，如果为None则默认分为一组
+        figsize: tuple - 图形尺寸
+        title: str, optional - 图形标题
+    """
+
+    x_label = x.name if isinstance(x, pd.Series) and x.name is not None else 'X轴'
+    y_label = y.name if isinstance(y, pd.Series) and y.name is not None else 'Y轴'
+
+    # 如果groups为None，创建默认分组
+    if groups is None:
+        groups = pd.Series(['Default'] * len(x), name='分组')
+    
+    # 获取唯一的分组
+    unique_groups = np.unique(groups)
+    n_groups = len(unique_groups)
+
+    # 计算行列数，使子图布局尽量接近正方形
+    n_cols = int(np.ceil(np.sqrt(n_groups)))
+    n_rows = int(np.ceil(n_groups / n_cols)) 
+
+    # 创建图形和子图
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize,
+                             sharex=True, sharey=True,
+                             squeeze=False)
+
+    for i, group in enumerate(unique_groups):
+        # 获取当前组的数据
+        mask = groups == group
+        group_x = x[mask]
+        group_y = y[mask]
+
+        # 计算子图位置
+        row = i // n_cols
+        col = i % n_cols
+        ax = axes[row, col]
+
+        # 按照x的大小等频率分组 使用pd.qcut label为x的中位数
+        group_x_quantile = pd.qcut(group_x, 10, labels=False, duplicates='drop')
+        
+        # 收集所有散点坐标
+        x_means = []
+        y_means = []
+        
+        for quantile in sorted(group_x_quantile.unique()):
+            mask = group_x_quantile == quantile
+            group_x_quantile_x = group_x[mask].mean()
+            group_x_quantile_y = group_y[mask].mean()
+            x_means.append(group_x_quantile_x)
+            y_means.append(group_x_quantile_y)
+
+        # 按照X值排序，确保折线沿着X增大的方向
+        sorted_points = sorted(zip(x_means, y_means), key=lambda x: x[0])
+        sorted_x_points = [point[0] for point in sorted_points]
+        sorted_y_points = [point[1] for point in sorted_points]
+        
+        # 绘制连接所有散点的折线
+        if len(sorted_x_points) > 1:
+            ax.plot(sorted_x_points, sorted_y_points, color='black', linewidth=2, marker='o')
+        
+        ax.set_title(f"{group}")
+        ax.set_xlabel(x_label, fontsize=12)
+        ax.set_ylabel(y_label, fontsize=12)
+        ax.grid(True, linestyle='--', alpha=0.7)
+    # 隐藏空的子图
+    for i in range(n_groups, n_rows * n_cols):
+        row = i // n_cols
+        col = i % n_cols
+        axes[row, col].axis('off')
+    # 添加总标题
+    if title:
+        fig.suptitle(title, fontsize=18, y=0.95)
+    plt.tight_layout()
 
     return fig, axes
