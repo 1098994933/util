@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 from itertools import combinations
 import re
-from util.Config import Config
+from .Config import Config
 
 project_dataset_path = Config['project_dataset_path']
 element_data = pd.read_excel(os.path.join(project_dataset_path, "element_data.xlsx"), index_col=0)

@@ -117,7 +117,7 @@ def fcv(original_model, X, y, minimum_ratio=0.1, maximum_ratio=0.95, reverse=Fal
             model = clone(original_model)
             model.fit(X_train, y_train)
         else:
-            pass
+            model = clone(original_model)
         y_pred = model.predict(X_val)
 
         label.extend(list(y_val))
@@ -232,7 +232,7 @@ def forward_holdout(original_model, X, y, test_ratio, reverse=False):
         model = clone(original_model)
         model.fit(X_train, y_train)
     else:
-        pass
+        model = clone(original_model)
     y_pred = model.predict(X_val)
     return y_val, y_pred, X_train, y_train
 
