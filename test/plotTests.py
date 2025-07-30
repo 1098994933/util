@@ -8,10 +8,11 @@ from matplotlib.figure import Figure
 import unittest
 import sys
 import os
+from datetime import datetime, timedelta
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from plot import plot_grouped_contour
+from plot import plot_grouped_contour, plot_group_time_rolling
 
 
 class TestPlotFunctions(unittest.TestCase):
@@ -39,6 +40,28 @@ class TestPlotFunctions(unittest.TestCase):
         self.scatter_x = pd.Series(np.random.uniform(0, 20, 200), name='X轴')
         self.scatter_y = pd.Series(np.random.uniform(0, 20, 200), name='Y轴')
         self.scatter_groups = pd.Series(np.random.choice(['A', 'B', 'C'], 200), name='分组')
+
+        # 创建时间序列
+        start_date = datetime(2023, 1, 1)
+        self.dates = [start_date + timedelta(days=i) for i in range(n_points)]
+        
+        # 创建分组数据
+        self.group_data = ['Group_A'] * 50 + ['Group_B'] * 50
+        
+        # 创建带有噪声的数据
+        self.x_base = np.linspace(0, 10, n_points)
+        self.y_base = 2 * self.x_base + 3 + np.random.normal(0, 0.5, n_points)
+        
+        # 添加一些时间趋势
+        self.time_trend = np.sin(np.linspace(0, 4*np.pi, n_points)) * 0.5
+        self.y_with_trend = self.y_base + self.time_trend
+        
+        self.test_data = pd.DataFrame({
+            'time': self.dates,
+            'x': self.x_base,
+            'y': self.y_with_trend,
+            'group': self.group_data
+        })
 
     def test_plot_grouped_contour_basic(self):
         """测试基本的plot_grouped_contour功能"""
@@ -207,6 +230,155 @@ class TestPlotFunctions(unittest.TestCase):
         )
         
         self.assertIsInstance(fig, Figure)
+        plt.close(fig)
+
+    def test_plot_group_time_rolling_basic(self):
+        """测试基本的plot_group_time_rolling功能"""
+        time_col = self.test_data['time']
+        x_col = self.test_data['x']
+        y_col = self.test_data['y']
+        groups_col = self.test_data['group']
+        
+        # 测试基本调用
+        fig, axes = plot_group_time_rolling(
+            time_col=time_col,
+            x=x_col,
+            y=y_col,
+            groups=groups_col,
+            window=5
+        )
+        
+        # 验证返回的图形对象
+        self.assertIsInstance(fig, Figure)
+        self.assertIsInstance(axes, np.ndarray)
+        
+        # 验证图形包含双坐标轴
+        if axes.size > 0:
+            ax = axes.flat[0]
+            # 检查是否有次坐标轴
+            self.assertTrue(hasattr(ax, 'right_ax') or len(ax.figure.axes) > 1)
+            
+            # 验证坐标轴范围是否共享
+            if axes.size > 1:
+                first_ax = axes.flat[0]
+                second_ax = axes.flat[1]
+                # 检查主坐标轴范围是否相同
+                self.assertEqual(first_ax.get_ylim(), second_ax.get_ylim())
+        
+        # 关闭图形以释放内存
+        plt.close(fig)
+    
+    def test_plot_group_time_rolling_no_groups(self):
+        """测试没有分组的情况"""
+        time_col = self.test_data['time']
+        x_col = self.test_data['x']
+        y_col = self.test_data['y']
+        
+        # 测试没有分组的情况
+        fig, axes = plot_group_time_rolling(
+            time_col=time_col,
+            x=x_col,
+            y=y_col,
+            window=10
+        )
+        
+        # 验证返回的图形对象
+        self.assertIsInstance(fig, plt.Figure)
+        self.assertIsInstance(axes, np.ndarray)
+        
+        # 关闭图形以释放内存
+        plt.close(fig)
+    
+    def test_plot_group_time_rolling_custom_window(self):
+        """测试自定义窗口大小"""
+        time_col = self.test_data['time']
+        x_col = self.test_data['x']
+        y_col = self.test_data['y']
+        groups_col = self.test_data['group']
+        
+        # 测试不同的窗口大小
+        fig, axes = plot_group_time_rolling(
+            time_col=time_col,
+            x=x_col,
+            y=y_col,
+            groups=groups_col,
+            window=15,
+            min_periods=3
+        )
+        
+        # 验证返回的图形对象
+        self.assertIsInstance(fig, plt.Figure)
+        self.assertIsInstance(axes, np.ndarray)
+        
+        # 关闭图形以释放内存
+        plt.close(fig)
+    
+    def test_plot_group_time_rolling_parameter_validation(self):
+        """测试参数验证"""
+        time_col = self.test_data['time']
+        x_col = self.test_data['x']
+        y_col = self.test_data['y']
+        
+        # 测试长度不匹配的情况
+        with self.assertRaises(ValueError):
+            plot_group_time_rolling(
+                time_col=time_col,
+                x=x_col[:-1],  # 少一个元素
+                y=y_col,
+                window=5
+            )
+        
+        # 测试无效的window参数
+        with self.assertRaises(ValueError):
+            plot_group_time_rolling(
+                time_col=time_col,
+                x=x_col,
+                y=y_col,
+                window=0  # 无效的window
+            )
+        
+        # 测试无效的min_periods参数
+        with self.assertRaises(ValueError):
+            plot_group_time_rolling(
+                time_col=time_col,
+                x=x_col,
+                y=y_col,
+                window=5,
+                min_periods=10  # 大于window
+            )
+        
+        # 测试无效的max_segments参数
+        with self.assertRaises(ValueError):
+            plot_group_time_rolling(
+                time_col=time_col,
+                x=x_col,
+                y=y_col,
+                window=5,
+                max_segments=0  # 无效的max_segments
+            )
+    
+    def test_plot_group_time_rolling_with_title(self):
+        """测试带标题的情况"""
+        time_col = self.test_data['time']
+        x_col = self.test_data['x']
+        y_col = self.test_data['y']
+        groups_col = self.test_data['group']
+        
+        # 测试带标题的情况
+        fig, axes = plot_group_time_rolling(
+            time_col=time_col,
+            x=x_col,
+            y=y_col,
+            groups=groups_col,
+            window=8,
+            title="测试时间滚动窗口图"
+        )
+        
+        # 验证返回的图形对象
+        self.assertIsInstance(fig, plt.Figure)
+        self.assertIsInstance(axes, np.ndarray)
+        
+        # 关闭图形以释放内存
         plt.close(fig)
 
 

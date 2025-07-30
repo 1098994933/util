@@ -1,5 +1,7 @@
 # 特征筛选类
 import logging
+import random
+
 import pandas as pd
 import numpy as np
 from scipy.stats import pearsonr
@@ -10,6 +12,8 @@ from sklearn.model_selection import cross_val_score, cross_val_predict
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.feature_selection import SequentialFeatureSelector
 
+np.random.seed(42)
+random.seed(42)
 
 class FeatureSelector(object):
     """
@@ -174,7 +178,7 @@ class FeatureSelector(object):
         
         return selected_features
 
-    def select_features_by_mutual_info(self, X, y):
+    def select_features_by_mutual_info(self, X, y,n_jobs=10):
         """
         使用互信息进行特征选择。
         """
@@ -182,7 +186,7 @@ class FeatureSelector(object):
             X = pd.DataFrame(X)
 
         # 使用互信息计算每个特征的重要性
-        mutual_info_scores = mutual_info_regression(X, y)
+        mutual_info_scores = mutual_info_regression(X, y,random_state=42,n_jobs=n_jobs)
 
         # 获取特征名称
         feature_names = X.columns.tolist()

@@ -21,15 +21,15 @@ def cal_reg_metric(y_true, y_predict):
     y_true = np.array(y_true)
     y_predict = np.array(y_predict)
     n = len(y_true)
-    MSE = mean_squared_error(y_true, y_predict)
-    RMSE = pow(MSE, 0.5)
-    MAE = mean_absolute_error(y_true, y_predict)
-    R2 = r2_score(y_true, y_predict)
+    mse = mean_squared_error(y_true, y_predict)
+    rmse = pow(mse, 0.5)
+    mae = mean_absolute_error(y_true, y_predict)
+    r2 = r2_score(y_true, y_predict)
     if np.std(y_true) == 0 or np.std(y_predict) == 0:
-        pccs = 0.0
+        r = 0.0
     else:
-        pccs = float(pearsonr(y_true, y_predict)[0])
-    return dict({"n_samples": n, "MSE": MSE, "RMSE": RMSE, "MAE": MAE, "R2": R2, 'R': pccs})
+        r = float(pearsonr(y_true, y_predict)[0])
+    return {"n_samples": n, "MSE": mse, "RMSE": rmse, "MAE": mae, "R2": r2, 'R': r}
 
 
 def cal_cls_metric(y_true, y_pred):
@@ -50,7 +50,7 @@ def cal_cls_metric(y_true, y_pred):
     return metrics
 
 
-def fcv(original_model, X, y, minimum_ratio=0.1, maximum_ratio=0.95, reverse=False, details=False, lite=False, k=10,
+def fcv(original_model, X, y, minimum_ratio=0.1, maximum_ratio=0.95, reverse=False, lite=False, k=10,
         m=1):
     """
     FCV method
@@ -60,7 +60,6 @@ def fcv(original_model, X, y, minimum_ratio=0.1, maximum_ratio=0.95, reverse=Fal
     :param minimum_ratio:
     :param maximum_ratio:
     :param reverse: True for use low Y data for training
-    :param details: If return the details for each fcv folder prediction
     :param lite:
     :param k: number of fcv folder
     :param m:
@@ -158,9 +157,6 @@ def cv(original_model, X, y, k=5):
         y_random = []
         cv_prediction = []
         for i, (train, test) in enumerate(kfold.split(X, y)):
-            sys.stdout.write('{} of {} fold \r'.format(i + 1, k))
-            sys.stdout.flush()
-
             # train sklearn model
             if issubclass(type(original_model), BaseEstimator):
                 model = clone(original_model)

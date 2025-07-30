@@ -117,7 +117,8 @@ def plot_regression_results(y_test, y_test_predict, y_train=None, y_train_predic
     plt.show()
 
 
-def plot_corr(dataset: pd.DataFrame, targets: list, save_path: Optional[str] = None, title: Optional[str] = None, figsize: Optional[tuple] = None) -> pd.DataFrame:
+def plot_corr(dataset: pd.DataFrame, targets: list, save_path: Optional[str] = None, title: Optional[str] = None,
+              figsize: Optional[tuple] = None) -> pd.DataFrame:
     """
     绘制特征相关性热力图
 
@@ -186,9 +187,6 @@ def plot_corr(dataset: pd.DataFrame, targets: list, save_path: Optional[str] = N
         plt.tight_layout()
         plt.show()
     return corr_matrix
-
-
-
 
 
 def plot_feature_importance(
@@ -572,7 +570,8 @@ def plot_grouped_contour(x, y, z, groups=None, resolution=50, levels=20, cmap="j
     return fig, axes
 
 
-def plot_group_by_freq_mean(x: pd.Series, y: pd.Series, groups: Optional[pd.Series] = None, figsize=(15, 10), title=None):
+def plot_group_by_freq_mean(x: pd.Series, y: pd.Series, groups: Optional[pd.Series] = None, figsize=(15, 10),
+                            title=None):
     """
     对x和y进行分组，并绘制，每个分组的x y 按照x的大小等频率分组，每个分组绘制一个，每个分组的x y
     
@@ -590,14 +589,14 @@ def plot_group_by_freq_mean(x: pd.Series, y: pd.Series, groups: Optional[pd.Seri
     # 如果groups为None，创建默认分组
     if groups is None:
         groups = pd.Series(['Default'] * len(x), name='分组')
-    
+
     # 获取唯一的分组
     unique_groups = np.unique(groups)
     n_groups = len(unique_groups)
 
     # 计算行列数，使子图布局尽量接近正方形
     n_cols = int(np.ceil(np.sqrt(n_groups)))
-    n_rows = int(np.ceil(n_groups / n_cols)) 
+    n_rows = int(np.ceil(n_groups / n_cols))
 
     # 创建图形和子图
     fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize,
@@ -617,27 +616,28 @@ def plot_group_by_freq_mean(x: pd.Series, y: pd.Series, groups: Optional[pd.Seri
 
         # 按照x的大小等频率分组 使用pd.qcut label为x的中位数
         group_x_quantile = pd.qcut(group_x, 10, labels=False, duplicates='drop')
-        
+
         # 收集所有散点坐标
         x_means = []
         y_means = []
-        
+
         for quantile in sorted(group_x_quantile.unique()):
             mask = group_x_quantile == quantile
-            group_x_quantile_x = group_x[mask].mean()
-            group_x_quantile_y = group_y[mask].mean()
-            x_means.append(group_x_quantile_x)
-            y_means.append(group_x_quantile_y)
+            x_mean = group_x[mask].mean()
+            y_mean = group_y[mask].mean()
+            x_means.append(x_mean)
+            y_means.append(y_mean)
 
         # 按照X值排序，确保折线沿着X增大的方向
         sorted_points = sorted(zip(x_means, y_means), key=lambda x: x[0])
         sorted_x_points = [point[0] for point in sorted_points]
         sorted_y_points = [point[1] for point in sorted_points]
-        
+
         # 绘制连接所有散点的折线
         if len(sorted_x_points) > 1:
             ax.plot(sorted_x_points, sorted_y_points, color='black', linewidth=2, marker='o')
-        
+        else:
+            ax.scatter(sorted_x_points, sorted_y_points, color='black', s=50)
         ax.set_title(f"{group}")
         ax.set_xlabel(x_label, fontsize=12)
         ax.set_ylabel(y_label, fontsize=12)
@@ -647,6 +647,140 @@ def plot_group_by_freq_mean(x: pd.Series, y: pd.Series, groups: Optional[pd.Seri
         row = i // n_cols
         col = i % n_cols
         axes[row, col].axis('off')
+    # 添加总标题
+    if title:
+        fig.suptitle(title, fontsize=18, y=0.95)
+    plt.tight_layout()
+
+    return fig, axes
+
+
+def plot_group_time_rolling(time_col: pd.Series, x: pd.Series, y: pd.Series, groups: Optional[pd.Series] = None,
+                            figsize=(15, 10), title=None, max_segments: int = 30):
+    """
+    对时间序列数据进行分组，并按时间顺序分段取平均值后绘制，提高大数据量时的绘图性能
+    
+    参数:
+        time_col: pd.Series - 时间列数据，用于排序和分段
+        x: pd.Series - X轴数据，将显示在次坐标轴上
+        y: pd.Series - Y轴数据，将显示在主坐标轴上
+        groups: pd.Series, optional - 分组数据，如果为None则默认分为一组
+        figsize: tuple - 图形尺寸
+        title: str, optional - 图形标题
+        min_periods: int - 滚动窗口计算所需的最小观测数，默认为1
+        max_segments: int - 每个分组最多分成的段数，默认为30
+    """
+
+    # 参数验证
+    if len(time_col) != len(x) or len(time_col) != len(y):
+        raise ValueError("时间列、x列和y列的长度必须相同")
+
+    # label
+    time_label = time_col.name if isinstance(time_col, pd.Series) and time_col.name is not None else '时间'
+    x_label = x.name if isinstance(x, pd.Series) and x.name is not None else 'X值'
+    y_label = y.name if isinstance(y, pd.Series) and y.name is not None else 'Y值'
+
+    # 如果groups为None，创建默认分组
+    if groups is None:
+        groups = pd.Series(['Default'] * len(time_col), name='分组')
+
+    # 创建DataFrame便于处理
+    df = pd.DataFrame({'time': time_col, 'x': x, 'y': y, 'group': groups})
+
+    # 获取唯一的分组
+    unique_groups = df['group'].unique()
+    n_groups = len(unique_groups)
+
+    # 计算行列数，使子图布局尽量接近正方形
+    n_cols = int(np.ceil(np.sqrt(n_groups)))
+    n_rows = int(np.ceil(n_groups / n_cols))
+
+    # 用于计算全局范围的变量
+    all_y_values = []
+    all_x_values = []
+    # 计算数据
+    for i, group in enumerate(unique_groups):
+        group_data = df[df['group'] == group].copy()
+        group_data = group_data.sort_values(by=['time'])
+        n_data = len(group_data)
+        n_segments = min(max_segments, n_data)
+        segment_indices = np.linspace(0, n_data - 1, n_segments, dtype=int)
+
+        segment_times = []
+        segment_x_means = []
+        segment_y_means = []
+        for j in range(len(segment_indices) - 1):
+            start_idx = segment_indices[j]
+            end_idx = segment_indices[j + 1]
+            segment_time = group_data['time'][start_idx:end_idx + 1].min()
+            segment_x_mean = group_data['x'][start_idx:end_idx + 1].mean()
+            segment_y_mean = group_data['y'][start_idx:end_idx + 1].mean()
+            segment_x_means.append(segment_x_mean)
+            segment_y_means.append(segment_y_mean)
+            all_x_values.append(segment_x_mean)
+            all_y_values.append(segment_y_mean)
+
+    # 创建图形和子图
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize,
+                             sharex=False, sharey=True,
+                             squeeze=False)
+
+    for i, group in enumerate(unique_groups):
+        # 计算子图位置
+        row = i // n_cols
+        col = i % n_cols
+        ax = axes[row, col]
+        margin = 0.02 * (max(all_x_values) - min(all_x_values))
+        # 创建次坐标轴
+        ax2 = ax.twinx()
+        ax2.set_ylim(min(all_x_values), max(all_x_values))
+        # 获取当前组的数据
+        group_data = df[df['group'] == group].copy()
+        group_data = group_data.sort_values('time')
+        n_data = len(group_data)
+        n_segments = min(max_segments, n_data)  # 分段数量
+        segment_indices = np.linspace(0, n_data - 1, n_segments, dtype=int)
+
+        # 计算每段的平均值
+        segment_times = []
+        segment_x_means = []
+        segment_y_means = []
+
+        for j in range(len(segment_indices) - 1):
+            start_idx = segment_indices[j]
+            end_idx = segment_indices[j + 1]
+
+            # 取当前段的时间中点
+            segment_time = group_data['time'].iloc[start_idx:end_idx + 1].min()
+            segment_x_mean = group_data['x'].iloc[start_idx:end_idx + 1].mean()
+            segment_y_mean = group_data['y'].iloc[start_idx:end_idx + 1].mean()
+
+            segment_times.append(segment_time)
+            segment_x_means.append(segment_x_mean)
+            segment_y_means.append(segment_y_mean)
+        x_rolling = segment_x_means
+        y_rolling = segment_y_means
+
+        ax.plot(segment_times, y_rolling, linewidth=2, marker="o", markersize=4, color='blue')
+        ax2.plot(segment_times, x_rolling, linewidth=2, marker="o", markersize=4, color='red')
+
+        # 设置子图标题和标签
+        ax.set_title(f"{group}", fontsize=14)
+        ax.set_xlabel(time_label, fontsize=10)
+        ax.set_ylabel(y_label, fontsize=10)
+        ax2.set_ylabel(x_label, fontsize=10)
+
+        # 合并图例
+        lines1, labels1 = ax.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax2.legend(lines1 + lines2, labels1 + labels2, fontsize=8)
+    fig.autofmt_xdate(rotation=45)
+    # 隐藏空的子图
+    for i in range(n_groups, n_rows * n_cols):
+        row = i // n_cols
+        col = i % n_cols
+        axes[row, col].axis('off')
+
     # 添加总标题
     if title:
         fig.suptitle(title, fontsize=18, y=0.95)
