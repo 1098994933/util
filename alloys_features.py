@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 from itertools import combinations
 import re
-from .Config import Config
+from util.Config import Config
 
 project_dataset_path = Config['project_dataset_path']
 element_data = pd.read_excel(os.path.join(project_dataset_path, "element_data.xlsx"), index_col=0)
@@ -83,16 +83,22 @@ def formula_to_ratio_dataset(dataset):
 
 class AlloyFeature(object):
     def __init__(self, ci, ei):
-        self.ele_data = element_data
-        self.ci = ci
-        self.ei = ei  # element name
-        self.ri = np.array([self.ele_data.loc[e, "Atomic radius"] for e in self.ei])
-        self.r_hat = np.sum(self.ci * self.ri)
+        self.element_data = element_data
+        self.element_fractions = ci  # 比例
+        self.element_symbols = ei  # 元素
+        self.atomic_radii = np.array([self.element_data.loc[e, "Atomic radius"] for e in self.element_symbols])
+        self.average_atomic_radius = np.sum(self.element_fractions * self.atomic_radii)  # 加权平均原子半径
+
+        # 物理常数
+        self.planck_constant = 6.62607015e-34  # 普朗克常数 (J·s)
+        self.boltzmann_constant = 1.380649e-23  # 玻尔兹曼常数 (J/K)
+        self.avogadro_constant = 6.02214076e23  # 阿伏伽德罗常数 (1/mol)
 
         self.feature_names = ["Atomic size difference",
                               "Atomic packing effect",
                               "Cohesion energy",
-                              "Shear modulus",
+                              "Shear modulus",  # 剪切模量
+                              "Yang's modulus",
                               "Lattice distortion energy",
                               "Difference in Shear modulus",
                               "Melting temperature",
@@ -111,6 +117,11 @@ class AlloyFeature(object):
                               "Pauling electronegativity",
                               "Allen electronegativity",
                               "Number of mobile electrons",
+                              "Estimated atomic volume per atom",
+                              "Estimated atomic number density",
+                              "Debye wavevector (proxy)",
+                              "Mean sound velocity (proxy)",
+                              "Debye temperature (proxy)",
                               ]
 
     def get_features(self):
@@ -132,170 +143,215 @@ class AlloyFeature(object):
         self.get_pauling_electronegativity()
         self.get_allen_electronegativity()
         self.get_ed()
-        return [self.delat_r, self.gama,
-                self.ec, self.g,
-                self.u, self.delat_g,
-                self.tm, self.entropy_of_mixing,
-                self.get_mixing_enthalpy(),
-                self.fai, self.pfc,
-                self.vec, self.energy_term,
-                self.dr, self.dg, self.f, self.w,
-                self.alpha1, self.alpha2, self.pe, self.ae, self.ed]
+        self.get_debye_related_features()
+        return [self.atomic_size_mismatch, self.atomic_packing_effect,
+                self.cohesive_energy, self.shear_modulus, self.youngs_modulus,
+                self.lattice_distortion_energy, self.shear_modulus_mismatch,
+                self.melting_temperature, self.entropy_of_mixing,
+                self.mixing_enthalpy,
+                self.solid_solution_forming_ability, self.phase_formation_coefficient,
+                self.valence_electron_concentration, self.energy_term,
+                self.local_size_mismatch, self.local_modulus_mismatch, self.peierls_nabarro_coefficient,
+                self.work_function,
+                self.local_atomic_distortion_single, self.local_atomic_distortion_group,
+                self.pauling_electronegativity_deviation, self.allen_electronegativity, self.electron_density,
+                self.estimated_atomic_volume, self.estimated_number_density, self.debye_wavevector_proxy,
+                self.mean_sound_velocity_proxy, self.debye_temperature_proxy]
 
     def get_delat_r(self):
-        self.delat_r = np.sum(self.ci * (1 - self.ri / self.r_hat) ** 2) ** 0.5
-        return self.delat_r
+        self.atomic_size_mismatch = np.sum(
+            self.element_fractions * (1 - self.atomic_radii / self.average_atomic_radius) ** 2) ** 0.5
+        return self.atomic_size_mismatch
 
     def get_gama(self):
         """Atomic packing effect in n-element alloys.
         rS and rL are the atomic radius of the smallest-size and largest-size atoms"""
-        self.rs = min(self.ri)
-        self.rl = max(self.ri)
-        a = (self.rs + self.r_hat) ** 2
-        b = self.r_hat ** 2
-        self.gama_1 = 1 - ((a - b) / a) ** 0.5
-        a = (self.rl + self.r_hat) ** 2
-        b = self.r_hat ** 2
-        self.gama_2 = 1 - ((a - b) / a) ** 0.5
-        self.gama = self.gama_1 / self.gama_2
-        return self.gama
+        self.min_atomic_radius = min(self.atomic_radii)
+        self.max_atomic_radius = max(self.atomic_radii)
+        a = (self.min_atomic_radius + self.average_atomic_radius) ** 2
+        b = self.average_atomic_radius ** 2
+        self.atomic_packing_effect_small = 1 - ((a - b) / a) ** 0.5
+        a = (self.max_atomic_radius + self.average_atomic_radius) ** 2
+        b = self.average_atomic_radius ** 2
+        self.atomic_packing_effect_large = 1 - ((a - b) / a) ** 0.5
+        self.atomic_packing_effect = self.atomic_packing_effect_small / self.atomic_packing_effect_large
+        return self.atomic_packing_effect
 
     def get_ec(self):
         """Cohesion energy"""
-        self.eci = np.array([self.ele_data.loc[e, "Cohesive_Energy(kJ/mol)"] for e in self.ei])
-        self.ec = np.sum(self.ci * self.eci)
+        self.cohesive_energies = np.array(
+            [self.element_data.loc[e, "Cohesive_Energy(kJ/mol)"] for e in self.element_symbols])
+        self.cohesive_energy = np.sum(self.element_fractions * self.cohesive_energies)
         # Valence electron concentration
-        self.veci = np.array([self.ele_data.loc[e, "VEC"] for e in self.ei])
-        self.vec = np.sum(self.ci * self.veci)
-        return self.ec
+        self.element_valence_electron_concentrations = np.array(
+            [self.element_data.loc[e, "VEC"] for e in self.element_symbols])
+        self.valence_electron_concentration = np.sum(
+            self.element_fractions * self.element_valence_electron_concentrations)
+        return self.cohesive_energy
 
     def get_g(self):
         """
         Rigidity_Modulus is Shear modulus
         """
-        self.gi = np.array([self.ele_data.loc[e, "Rigidity_Modulus"] for e in self.ei])
-        self.g = np.sum(self.ci * self.gi)
+        self.element_shear_moduli = np.array(
+            [self.element_data.loc[e, "Rigidity_Modulus"] for e in self.element_symbols])
+        self.shear_modulus = np.sum(self.element_fractions * self.element_shear_moduli)
         # Young's modulus
-        self.e = np.sum(self.ci * np.array([self.ele_data.loc[e, "Elastic_Modulus"] for e in self.ei]))
+        self.youngs_modulus = np.sum(self.element_fractions * np.array(
+            [self.element_data.loc[e, "Elastic_Modulus"] for e in self.element_symbols]))
         # u Lattice distortion energy
-        self.u = 0.5 * self.e * self.delat_r
-        return self.g
+        self.lattice_distortion_energy = 0.5 * self.youngs_modulus * self.atomic_size_mismatch
+        return self.shear_modulus, self.youngs_modulus
 
     def get_delta_g(self):
         """
         """
-        self.delat_g = np.sum(self.ci * (1 - self.gi / self.g) ** 2) ** 0.5
-        return self.delat_g
+        self.shear_modulus_mismatch = np.sum(
+            self.element_fractions * (1 - self.element_shear_moduli / self.shear_modulus) ** 2) ** 0.5
+        return self.shear_modulus_mismatch
 
     def get_tm(self):
         """Tm"""
-        self.tmi = np.array([self.ele_data.loc[e, "Elemental melting temperature"] for e in self.ei])
-        self.tm = np.sum(self.ci * self.tmi)
-        return self.tm
+        self.element_melting_temperatures = np.array(
+            [self.element_data.loc[e, "Elemental melting temperature"] for e in self.element_symbols])
+        self.melting_temperature = np.sum(self.element_fractions * self.element_melting_temperatures)
+        return self.melting_temperature
 
     def get_entropy_of_mixing(self):
         """Entropy of mixing"""
-        self.entropy_of_mixing = - 8.314 * np.sum(self.ci * np.log(self.ci))
+        self.entropy_of_mixing = - 8.314 * np.sum(self.element_fractions * np.log(self.element_fractions))
         return self.entropy_of_mixing
 
     def get_mixing_enthalpy(self):
         """Mixing enthalpy"""
-        combins = [c for c in combinations(list(range(len(self.ci))), 2)]
+        pair_indices = [c for c in combinations(list(range(len(self.element_fractions))), 2)]
         self.mixing_enthalpy = 0
-        for (i, j) in combins:
-            if self.ei[i] != self.ei[j]:
+        for (i, j) in pair_indices:
+            if self.element_symbols[i] != self.element_symbols[j]:
                 try:
-                    mix = self.ele_data.loc[self.ei[i], self.ei[j]]
+                    mixing_value = self.element_data.loc[self.element_symbols[i], self.element_symbols[j]]
                 except:
                     try:
-                        mix = self.ele_data.loc[self.ei[j], self.ei[i]]
+                        mixing_value = self.element_data.loc[self.element_symbols[j], self.element_symbols[i]]
                     except:
-                        mix = 0
-                self.mixing_enthalpy = self.mixing_enthalpy + 4 * self.ci[i] * self.ci[j] * mix
+                        mixing_value = 0
+                self.mixing_enthalpy = self.mixing_enthalpy + 4 * self.element_fractions[i] * self.element_fractions[
+                    j] * mixing_value
         return self.mixing_enthalpy
 
     def get_phase_formation_coefficient(self):
-        self.phase_formation_coefficient = self.entropy_of_mixing / (self.delat_r ** 2)
+        self.phase_formation_coefficient = self.entropy_of_mixing / (self.atomic_size_mismatch ** 2)
 
     def get_work_function(self):
-        self.wi = np.array([self.ele_data.loc[e, "Elemental work function"] for e in self.ei])
-        self.w = np.sum(self.ci * self.wi)
-        return self.w
+        self.element_work_functions = np.array(
+            [self.element_data.loc[e, "Elemental work function"] for e in self.element_symbols])
+        self.work_function = np.sum(self.element_fractions * self.element_work_functions)
+        return self.work_function
 
     def get_dr(self):
         # Local size mismatch in n-element alloys
-        combins = [c for c in combinations(list(range(len(self.ci))), 2)]
-        self.dr = 0
-        for (i, j) in combins:
-            self.dr = self.dr + self.ci[i] * self.ci[j] * abs(self.ri[i] - self.ri[j])
+        pair_indices = [c for c in combinations(list(range(len(self.element_fractions))), 2)]
+        self.local_size_mismatch = 0
+        for (i, j) in pair_indices:
+            self.local_size_mismatch = self.local_size_mismatch + self.element_fractions[i] * self.element_fractions[
+                j] * abs(self.atomic_radii[i] - self.atomic_radii[j])
         # Local modulus mismatch
-        combins = [c for c in combinations(list(range(len(self.ci))), 2)]
-        self.dg = 0
-        for (i, j) in combins:
-            self.dg = self.dg + self.ci[i] * self.ci[j] * abs(self.gi[i] - self.gi[j])
-        return self.dr
+        pair_indices = [c for c in combinations(list(range(len(self.element_fractions))), 2)]
+        self.local_modulus_mismatch = 0
+        for (i, j) in pair_indices:
+            self.local_modulus_mismatch = self.local_modulus_mismatch + self.element_fractions[i] * \
+                                          self.element_fractions[j] * abs(
+                self.element_shear_moduli[i] - self.element_shear_moduli[j])
+        return self.local_size_mismatch
 
     def get_energy_term(self):
         """Energy term"""
-        self.energy_term = self.g * self.delat_r * (1 + self.u) * (1 - self.u)
+        self.energy_term = self.shear_modulus * self.atomic_size_mismatch * (1 + self.lattice_distortion_energy) * (
+                    1 - self.lattice_distortion_energy)
         return self.energy_term
 
     def get_f(self):
         """
         Peierls-Nabarro stress coefficient
         """
-        self.f = 2 * self.g / (1 - self.u)
+        self.peierls_nabarro_coefficient = 2 * self.shear_modulus / (1 - self.lattice_distortion_energy)
 
     def get_fai(self):
         # Solid solution phase forming ability
         if self.mixing_enthalpy != 0:
             # the units of mixing_enthalpy is kJ and entropy_of_mixing is J
-            self.fai = self.tm * self.entropy_of_mixing / abs(self.mixing_enthalpy) / 1000
+            self.solid_solution_forming_ability = self.melting_temperature * self.entropy_of_mixing / abs(
+                self.mixing_enthalpy) / 1000
         else:
-            self.fai = 0
+            self.solid_solution_forming_ability = 0
         # Phase formation coefficient
-        self.pfc = self.entropy_of_mixing / (max(self.delat_r ** 2, 0.0001))
+        self.phase_formation_coefficient = self.entropy_of_mixing / (max(self.atomic_size_mismatch ** 2, 0.0001))
 
     def get_local_atomic_distortion(self):
         """
         from one single atom alone
         """
-        self.alpha1 = np.sum(self.ci * abs(self.ri - self.r_hat) / self.r_hat)
-        return self.alpha1
+        self.local_atomic_distortion_single = np.sum(
+            self.element_fractions * abs(self.atomic_radii - self.average_atomic_radius) / self.average_atomic_radius)
+        return self.local_atomic_distortion_single
 
     def get_local_atomic_distortion2(self):
-        combins = [c for c in combinations(list(range(len(self.ci))), 2)]
-        self.alpha2 = 0
-        for (i, j) in combins:
-            self.alpha2 = self.dg + self.ci[i] * self.ci[j] * abs(self.ri[i] + self.ri[j] - 2 * self.r_hat) / (
-                    2 * self.r_hat)
-        return self.alpha2
+        pair_indices = [c for c in combinations(list(range(len(self.element_fractions))), 2)]
+        self.local_atomic_distortion_group = 0
+        for (i, j) in pair_indices:
+            self.local_atomic_distortion_group = self.local_modulus_mismatch + self.element_fractions[i] * \
+                                                 self.element_fractions[j] * abs(
+                self.atomic_radii[i] + self.atomic_radii[j] - 2 * self.average_atomic_radius) / (
+                                                         2 * self.average_atomic_radius)
+        return self.local_atomic_distortion_group
 
     def get_pauling_electronegativity(self):
         """Pauling electronegativity"""
-        self.pei = np.array([self.ele_data.loc[e, "Electronegativity Pauling"] for e in self.ei])
-        self.pe_hat = np.sum(self.ci * self.pei)
-        self.pe = (np.sum(self.ci * (self.pei - self.pe_hat) ** 2)) ** 0.5
-        return self.pe
+        self.element_pauling_electronegativities = np.array(
+            [self.element_data.loc[e, "Electronegativity Pauling"] for e in self.element_symbols])
+        self.average_pauling_electronegativity = np.sum(
+            self.element_fractions * self.element_pauling_electronegativities)
+        self.pauling_electronegativity_deviation = (np.sum(self.element_fractions * (
+                    self.element_pauling_electronegativities - self.average_pauling_electronegativity) ** 2)) ** 0.5
+        return self.pauling_electronegativity_deviation
 
     def get_allen_electronegativity(self):
-        self.aei = np.array([self.ele_data.loc[e, "Electronegativity Allred"] for e in self.ei])
-        self.ae_hat = np.sum(self.ci * self.aei)
-        self.ae = np.sum(self.ci * abs(1 - self.aei / self.ae_hat) ** 2)
-        return self.ae
+        self.element_allen_electronegativities = np.array(
+            [self.element_data.loc[e, "Electronegativity Allred"] for e in self.element_symbols])
+        self.average_allen_electronegativity = np.sum(self.element_fractions * self.element_allen_electronegativities)
+        self.allen_electronegativity = np.sum(self.element_fractions * abs(
+            1 - self.element_allen_electronegativities / self.average_allen_electronegativity) ** 2)
+        return self.allen_electronegativity
 
     def get_ed(self):
         """ Elemental electron density"""
-        self.edi = np.array([self.ele_data.loc[e, "Elemental electron density"] for e in self.ei])
-        self.ed = np.sum(self.ci * self.edi)
-        return self.ed
+        self.element_electron_densities = np.array(
+            [self.element_data.loc[e, "Elemental electron density"] for e in self.element_symbols])
+        self.electron_density = np.sum(self.element_fractions * self.element_electron_densities)
+        return self.electron_density
+
+    def get_debye_related_features(self):
+        """
+        Estimate Debye-related features using only constants, atomic radii, and already-computed properties.
+        This yields proxy features for ranking/correlation purposes.
+        """
+        # Estimated atomic volume per atom from average atomic radius (sphere approximation)
+        self.estimated_atomic_volume = (4.0 / 3.0) * np.pi * (self.average_atomic_radius ** 3)
+        # Estimated atomic number density (atoms per m^3 in relative units)
+        self.estimated_number_density = 1.0 / max(self.estimated_atomic_volume, 1e-30)
+        # Debye wavevector proxy k_D = (6*pi^2*n)^(1/3)
+        self.debye_wavevector_proxy = (6.0 * (np.pi ** 2) * self.estimated_number_density) ** (1.0 / 3.0)
+        # Mean sound velocity proxy using Young's modulus and electron density as a mass-density surrogate
+        self.mean_sound_velocity_proxy = np.sqrt(max(self.youngs_modulus, 0.0) / max(self.electron_density, 1e-30))
+        # Debye temperature proxy
+        self.debye_temperature_proxy = (self.planck_constant / self.boltzmann_constant) * self.debye_wavevector_proxy * self.mean_sound_velocity_proxy
 
 
 if __name__ == '__main__':
-    d = find_elements("ZrCu")
-    print(d)
-    d = find_elements("AlCrFeNiMo0.5")
-    print(d)
+    # d = find_elements("ZrCu")
+    # print(d)
+    # d = find_elements("AlCrFeNiMo0.5")
+    # print(d)
     # test case 1
     # ci = np.array([0.5, 0.4, 0.1])
     # ei = ["Al", "Cu", 'Zn']
@@ -310,7 +366,7 @@ if __name__ == '__main__':
     # af = AlloyFeature(ci, ei)
 
     # knowledge-aware feature calculation for training dataset
-    dataset = pd.read_csv("../data/formula.csv")
+    dataset = pd.read_csv("../data/formula_Ga-In-Sn-Bi.csv")
     df1 = formula_to_features(dataset['formula'])
     print(df1)
     df1.to_csv("../data/alloy_features.csv", index=False)
