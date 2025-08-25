@@ -118,7 +118,7 @@ def plot_regression_results(y_test, y_test_predict, y_train=None, y_train_predic
 
 
 def plot_corr(dataset: pd.DataFrame, targets: list, save_path: Optional[str] = None, title: Optional[str] = None,
-              figsize: Optional[tuple] = None) -> pd.DataFrame:
+              figsize: Optional[tuple] = None, method="pearson") -> pd.DataFrame:
     """
     绘制特征相关性热力图
 
@@ -133,7 +133,7 @@ def plot_corr(dataset: pd.DataFrame, targets: list, save_path: Optional[str] = N
     if not isinstance(targets, list) or len(targets) < 2:
         raise ValueError("targets应为包含至少两个特征名的列表")
 
-    corr_matrix = dataset[targets].corr()
+    corr_matrix = dataset[targets].corr(method=method)
     n_features = len(targets)
     # 动态计算图形尺寸
     base_size = 1.2  # 每个特征的基础尺寸单位
