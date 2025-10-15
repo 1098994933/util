@@ -1,9 +1,9 @@
 """
 functions of plot figures
 """
-import warnings
 from typing import List, Optional
 
+from matplotlib.figure import Figure
 from matplotlib.pylab import mpl
 import pandas as pd
 import numpy as np
@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
 from typing import Tuple
 import warnings
+
 mpl.rcParams['font.sans-serif'] = ['SimHei']  # 显示中文
 mpl.rcParams['axes.unicode_minus'] = False  # 显示负号
 
@@ -90,12 +91,22 @@ def plot_regression_results(y_test, y_test_predict, y_train=None, y_train_predic
         mae = evaluation_matrix.get("MAE", None)
         r = evaluation_matrix.get("R", None)
         text_lines = []
+
+        def format_eval_number(num):
+            """根据数值大小自动选择显示格式"""
+            if abs(num) < 1e-3 or abs(num) > 1e6:
+                return f"{num:.2e}"
+            elif abs(num) < 1:
+                return f"{num:.6f}".rstrip('0').rstrip('.')
+            else:
+                return f"{num:.3f}"
+
         if r2 is not None:
-            text_lines.append(f"$R^2={r2:.3f}$")
+            text_lines.append(f"$R^2={format_eval_number(r2)}$")
         if mae is not None:
-            text_lines.append(f"$MAE={mae:.3f}$")
+            text_lines.append(f"$MAE={format_eval_number(mae)}$")
         if r is not None:
-            text_lines.append(f"$R={r:.3f}$")
+            text_lines.append(f"$R={format_eval_number(r)}$")
         plt.text(0.05, 0.70, '\n'.join(text_lines), transform=ax.transAxes, fontsize=10,
                  bbox=dict(facecolor='white', alpha=0.6))
     # Add optional title
@@ -114,11 +125,11 @@ def plot_regression_results(y_test, y_test_predict, y_train=None, y_train_predic
             plt.text(x, y, f'{i}', fontsize=8, ha='right', va='bottom', color='black')
 
     # Show plot
-    plt.show()
+    return plt.gcf()
 
 
 def plot_corr(dataset: pd.DataFrame, targets: list, save_path: Optional[str] = None, title: Optional[str] = None,
-              figsize: Optional[tuple] = None, method="pearson") -> pd.DataFrame:
+              figsize: Optional[tuple] = None) -> Figure:
     """
     绘制特征相关性热力图
 
@@ -133,7 +144,7 @@ def plot_corr(dataset: pd.DataFrame, targets: list, save_path: Optional[str] = N
     if not isinstance(targets, list) or len(targets) < 2:
         raise ValueError("targets应为包含至少两个特征名的列表")
 
-    corr_matrix = dataset[targets].corr(method=method)
+    corr_matrix = dataset[targets].corr()
     n_features = len(targets)
     # 动态计算图形尺寸
     base_size = 1.2  # 每个特征的基础尺寸单位
@@ -147,7 +158,7 @@ def plot_corr(dataset: pd.DataFrame, targets: list, save_path: Optional[str] = N
     # annot_size = max(8, 12 - n_features//5) * annot_font_scale
 
     # 创建画布
-    plt.figure(figsize=figsize, dpi=300)
+    fig = plt.figure(figsize=figsize, dpi=300)
     with sns.axes_style("white"):
         ax = sns.heatmap(corr_matrix, annot=True, annot_kws={"size": 10, "weight": "bold"}, fmt=".2f",
                          cmap="rainbow", linewidths=0, vmin=-1, vmax=1, square=True,
@@ -186,7 +197,7 @@ def plot_corr(dataset: pd.DataFrame, targets: list, save_path: Optional[str] = N
     else:
         plt.tight_layout()
         plt.show()
-    return corr_matrix
+    return fig
 
 
 def plot_feature_importance(
@@ -357,7 +368,7 @@ def plot_decision_tree(model, feature_names=None, class_names=None, save_path=No
                        filled=True, rounded=True, impurity=True):
     """
     可视化决策树模型
-    
+
     params:
     model: sklearn.tree.DecisionTreeClassifier 或 DecisionTreeRegressor
         训练好的决策树模型
@@ -379,7 +390,7 @@ def plot_decision_tree(model, feature_names=None, class_names=None, save_path=No
         是否使用圆角矩形，默认为True
     impurity: bool, optional
         是否显示不纯度，默认为True
-    
+
     return:
     fig: matplotlib.figure.Figure
         图形对象
@@ -412,7 +423,7 @@ def plot_decision_tree(model, feature_names=None, class_names=None, save_path=No
 
 def process_1d_vectors(x, y, z, resolution=50):
     """
-    将一维向量形式的三维数据转换为二维网格数据
+    将x,y,z 三个 一维向量形式的数据转换为二维网格数据
 
     参数:
         x, y, z: 一维向量数据
@@ -428,7 +439,7 @@ def process_1d_vectors(x, y, z, resolution=50):
     X, Y = np.meshgrid(xi, yi)
 
     # 使用线性插值填充网格
-    Z = griddata((x, y), z, (X, Y), method='cubic')
+    Z = griddata((x, y), z, (X, Y), method='linear')
 
     return X, Y, Z
 
@@ -501,9 +512,9 @@ def plot_grouped_contour(x, y, z, groups=None, resolution=50, levels=20, cmap="j
         ax = axes[row, col]
 
         # 检查x, y, z是否为常数
-        x_is_constant = max(group_x) - min(group_x) < 1e-6
-        y_is_constant = max(group_y) - min(group_y) < 1e-6
-        z_is_constant = max(group_z) - min(group_z) < 1e-6
+        x_is_constant = max(group_x) - min(group_x) < 1e-20
+        y_is_constant = max(group_y) - min(group_y) < 1e-20
+        z_is_constant = max(group_z) - min(group_z) < 1e-20
 
         if x_is_constant or y_is_constant or z_is_constant:
             # 如果任一维度为常数，创建散点图
@@ -513,14 +524,26 @@ def plot_grouped_contour(x, y, z, groups=None, resolution=50, levels=20, cmap="j
                                  vmax=global_vmax if share_colorbar else max(group_z))
 
             # 添加常数值标注
+            def format_number(num):
+                """根据数值大小自动选择显示格式"""
+                if abs(num) < 1e-3 or abs(num) > 1e6:
+                    # 对于很小的数或很大的数使用科学计数法
+                    return f"{num:.2e}"
+                elif abs(num) < 1:
+                    # 对于小于1的数，保留更多小数位
+                    return f"{num:.6f}".rstrip('0').rstrip('.')
+                else:
+                    # 对于正常范围的数，保留2位小数
+                    return f"{num:.2f}"
+
             if x_is_constant:
-                ax.text(0.02, 0.98, f'X = {group_x[0]:.2f}',
+                ax.text(0.02, 0.98, f'X = {format_number(group_x[0])}',
                         transform=ax.transAxes, va='top')
             if y_is_constant:
-                ax.text(0.02, 0.93, f'Y = {group_y[0]:.2f}',
+                ax.text(0.02, 0.93, f'Y = {format_number(group_y[0])}',
                         transform=ax.transAxes, va='top')
             if z_is_constant:
-                ax.text(0.02, 0.88, f'Z = {group_z[0]:.2f}',
+                ax.text(0.02, 0.88, f'Z = {format_number(group_z[0])}',
                         transform=ax.transAxes, va='top')
 
             contour = scatter  # 为了后面的colorbar
@@ -574,7 +597,7 @@ def plot_group_by_freq_mean(x: pd.Series, y: pd.Series, groups: Optional[pd.Seri
                             title=None):
     """
     对x和y进行分组，并绘制，每个分组的x y 按照x的大小等频率分组，每个分组绘制一个，每个分组的x y
-    
+
     参数:
         x: pd.Series - X轴数据
         y: pd.Series - Y轴数据
@@ -659,7 +682,7 @@ def plot_group_time_rolling(time_col: pd.Series, x: pd.Series, y: pd.Series, gro
                             figsize=(15, 10), title=None, max_segments: int = 30):
     """
     对时间序列数据进行分组，并按时间顺序分段取平均值后绘制，提高大数据量时的绘图性能
-    
+
     参数:
         time_col: pd.Series - 时间列数据，用于排序和分段
         x: pd.Series - X轴数据，将显示在次坐标轴上
@@ -680,101 +703,142 @@ def plot_group_time_rolling(time_col: pd.Series, x: pd.Series, y: pd.Series, gro
     x_label = x.name if isinstance(x, pd.Series) and x.name is not None else 'X值'
     y_label = y.name if isinstance(y, pd.Series) and y.name is not None else 'Y值'
 
+    df = pd.DataFrame({'time': time_col, 'x': x, 'y': y})
+    df = df.dropna()
+    if len(df) == 0:
+        raise ValueError("dataset has no valid data")
     # 如果groups为None，创建默认分组
     if groups is None:
-        groups = pd.Series(['Default'] * len(time_col), name='分组')
-
-    # 创建DataFrame便于处理
-    df = pd.DataFrame({'time': time_col, 'x': x, 'y': y, 'group': groups})
+        df['group'] = ' '
+    else:
+        df['group'] = groups
 
     # 获取唯一的分组
     unique_groups = df['group'].unique()
+    n_groups = len(unique_groups)
+
+    # 排除数据量小于2的组
+    unique_groups = [group for group in unique_groups if len(df[df['group'] == group]) > 1]
     n_groups = len(unique_groups)
 
     # 计算行列数，使子图布局尽量接近正方形
     n_cols = int(np.ceil(np.sqrt(n_groups)))
     n_rows = int(np.ceil(n_groups / n_cols))
 
-    # 用于计算全局范围的变量
-    all_y_values = []
-    all_x_values = []
-    # 计算数据
-    for i, group in enumerate(unique_groups):
-        group_data = df[df['group'] == group].copy()
-        group_data = group_data.sort_values(by=['time'])
+    # 预处理：按组排序并计算分段数据
+    def compute_segment_data_vectorized(group_data, max_segments):
+        """使用完全向量化的numpy操作计算分段数据"""
         n_data = len(group_data)
-        n_segments = min(max_segments, n_data)
+        if n_data <= 1:
+            return np.array([]), np.array([]), np.array([])
+
+        n_segments = min(max_segments, n_data)  # number of time segment
         segment_indices = np.linspace(0, n_data - 1, n_segments, dtype=int)
 
+        # 转换为numpy数组以提高性能
+        time_values = group_data['time'].values
+        x_values = group_data['x'].values
+        y_values = group_data['y'].values
+
+        # 完全向量化的分段计算
+        n_segments_actual = len(segment_indices) - 1
+        if n_segments_actual == 0:
+            return np.array([]), np.array([]), np.array([])
+
+        # 创建分段索引
+        start_indices = segment_indices[:-1]
+        end_indices = segment_indices[1:]
+
+        # 使用numpy的高级索引和广播进行完全向量化计算
+        # plot data ponits
         segment_times = []
-        segment_x_means = []
-        segment_y_means = []
-        for j in range(len(segment_indices) - 1):
-            start_idx = segment_indices[j]
-            end_idx = segment_indices[j + 1]
-            segment_time = group_data['time'][start_idx:end_idx + 1].min()
-            segment_x_mean = group_data['x'][start_idx:end_idx + 1].mean()
-            segment_y_mean = group_data['y'][start_idx:end_idx + 1].mean()
-            segment_x_means.append(segment_x_mean)
-            segment_y_means.append(segment_y_mean)
-            all_x_values.append(segment_x_mean)
-            all_y_values.append(segment_y_mean)
+        segment_x_means = np.zeros(n_segments_actual)
+        segment_y_means = np.zeros(n_segments_actual)
+
+        # 检查时间列是否为字符串类型
+        is_time_string = pd.api.types.is_string_dtype(time_values) or (len(time_values) > 0 and isinstance(time_values[0], str))
+
+        for i, (start, end) in enumerate(zip(start_indices, end_indices)):
+            # 处理时间列：根据数据类型选择合适的方法
+            if is_time_string:
+                segment_time = group_data['time'].iloc[start:end+1].min()
+            else:
+                segment_time = np.min(time_values[start:end+1])
+
+            segment_times.append(segment_time)
+            segment_x_means[i] = np.mean(x_values[start:end+1])
+            segment_y_means[i] = np.mean(y_values[start:end+1])
+
+        segment_times = np.array(segment_times)
+
+        return segment_times, segment_x_means, segment_y_means
+
+    # 一次性计算所有组的分段数据，避免重复计算
+    group_segment_data = {}
+    all_x_values = []
+    all_y_values = []
+
+    # 预先排序所有数据，避免在循环中重复排序
+    df_sorted = df.sort_values(by=['group', 'time'])
+
+    # 使用groupby进行高效分组，避免重复的布尔索引操作
+    grouped_data = df_sorted.groupby('group')
+
+    for group, group_data in grouped_data:
+        segment_times, segment_x_means, segment_y_means = compute_segment_data_vectorized(group_data, max_segments)
+
+        group_segment_data[group] = {
+            'times': segment_times,
+            'x_means': segment_x_means,
+            'y_means': segment_y_means
+        }
+
+        # 收集全局范围数据
+        all_x_values.extend(segment_x_means)
+        all_y_values.extend(segment_y_means)
 
     # 创建图形和子图
     fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize,
                              sharex=False, sharey=True,
                              squeeze=False)
 
+    # 绘制每个组的图表
     for i, group in enumerate(unique_groups):
         # 计算子图位置
         row = i // n_cols
         col = i % n_cols
         ax = axes[row, col]
-        margin = 0.02 * (max(all_x_values) - min(all_x_values))
+
         # 创建次坐标轴
         ax2 = ax.twinx()
-        ax2.set_ylim(min(all_x_values), max(all_x_values))
-        # 获取当前组的数据
-        group_data = df[df['group'] == group].copy()
-        group_data = group_data.sort_values('time')
-        n_data = len(group_data)
-        n_segments = min(max_segments, n_data)  # 分段数量
-        segment_indices = np.linspace(0, n_data - 1, n_segments, dtype=int)
+        if all_x_values:  # 避免空列表错误
+            ax2.set_ylim(min(all_x_values), max(all_x_values))
 
-        # 计算每段的平均值
-        segment_times = []
-        segment_x_means = []
-        segment_y_means = []
+        # 获取预计算的分段数据
+        segment_data = group_segment_data[group]
+        segment_times = segment_data['times']
+        segment_x_means = segment_data['x_means']
+        segment_y_means = segment_data['y_means']
 
-        for j in range(len(segment_indices) - 1):
-            start_idx = segment_indices[j]
-            end_idx = segment_indices[j + 1]
-
-            # 取当前段的时间中点
-            segment_time = group_data['time'].iloc[start_idx:end_idx + 1].min()
-            segment_x_mean = group_data['x'].iloc[start_idx:end_idx + 1].mean()
-            segment_y_mean = group_data['y'].iloc[start_idx:end_idx + 1].mean()
-
-            segment_times.append(segment_time)
-            segment_x_means.append(segment_x_mean)
-            segment_y_means.append(segment_y_mean)
-        x_rolling = segment_x_means
-        y_rolling = segment_y_means
-
-        ax.plot(segment_times, y_rolling, linewidth=2, marker="o", markersize=4, color='blue')
-        ax2.plot(segment_times, x_rolling, linewidth=2, marker="o", markersize=4, color='red')
+        # 绘制图表
+        if len(segment_times) > 0:
+            ax.plot(segment_times, segment_y_means, linewidth=2, marker="o", markersize=4, color='blue', label=y_label)
+            ax2.plot(segment_times, segment_x_means, linewidth=2, marker="o", markersize=4, color='red', label=x_label)
 
         # 设置子图标题和标签
-        ax.set_title(f"{group}", fontsize=14)
-        ax.set_xlabel(time_label, fontsize=10)
-        ax.set_ylabel(y_label, fontsize=10)
-        ax2.set_ylabel(x_label, fontsize=10)
+        ax.set_title(f"{group}", fontsize=15)
+        ax.set_xlabel(time_label, fontsize=15)
+        ax.set_ylabel(y_label, fontsize=15)
+        ax2.set_ylabel(x_label, fontsize=15)
 
         # 合并图例
         lines1, labels1 = ax.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
-        ax2.legend(lines1 + lines2, labels1 + labels2, fontsize=8)
+
+        ax2.legend(lines1 + lines2, labels1 + labels2, loc='upper center',bbox_to_anchor=(0.5, -0.10),fontsize=12)
+
     fig.autofmt_xdate(rotation=45)
+
     # 隐藏空的子图
     for i in range(n_groups, n_rows * n_cols):
         row = i // n_cols
@@ -787,3 +851,74 @@ def plot_group_time_rolling(time_col: pd.Series, x: pd.Series, y: pd.Series, gro
     plt.tight_layout()
 
     return fig, axes
+
+
+def plot_rf_corr(df: pd.DataFrame, y_col: str, top_features: list, n: int = 10, save_path: str = None, title: str = None):
+    """
+    绘制因变量和前n个重要特征的相关性热图
+    :param df: 数据集DataFrame
+    :param y_col: 因变量列名
+    :param top_features: 重要特征名列表
+    :param n: 取前n个特征
+    :param save_path: 图片保存路径
+    :param title: 图标题
+    :return: corr_matrix
+    """
+    targets = [y_col] + top_features[:n]
+    return plot_corr(df, targets, save_path=save_path, title=title)
+
+
+def plot_y_histogram(y_series, bins=20):
+    """
+    绘制Y列直方图
+
+    Args:
+        y_series: pandas Series，Y列数据
+        bins: 直方图bin数量，默认20
+
+    Returns:
+        matplotlib.figure.Figure: 直方图fig对象，失败时返回None
+    """
+    try:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.hist(y_series, bins=bins, alpha=0.7, color='skyblue', edgecolor='black')
+
+        # 使用Series的名称作为标题和x轴标签
+        series_name = y_series.name if y_series.name is not None else 'Y'
+        ax.set_title(f'Distribution of {series_name}', fontsize=14)
+        ax.set_xlabel(series_name, fontsize=12)
+        ax.set_ylabel('Frequency', fontsize=12)
+        ax.grid(True, alpha=0.3)
+
+        # 计算统计量
+        mean_val = y_series.mean()
+        std_val = y_series.std()
+        min_val = y_series.min()
+        max_val = y_series.max()
+
+        # 根据数值大小自动调整显示格式
+        def format_number(num):
+            """根据数值大小自动选择显示格式"""
+            if abs(num) < 1e-3 or abs(num) > 1e6:
+                # 对于很小的数或很大的数使用科学计数法
+                return f"{num:.2e}"
+            elif abs(num) < 1:
+                # 对于小于1的数，保留更多小数位
+                return f"{num:.6f}".rstrip('0').rstrip('.')
+            else:
+                # 对于正常范围的数，保留2位小数
+                return f"{num:.2f}"
+
+        # 添加统计量：均值 标准差 范围[最小值-最大值]
+        ax.text(0.02, 0.98, f'mean: {format_number(mean_val)}', transform=ax.transAxes, va='top')
+        ax.text(0.02, 0.93, f'std: {format_number(std_val)}', transform=ax.transAxes, va='top')
+        ax.text(0.02, 0.88, f'range: {format_number(min_val)} - {format_number(max_val)}', transform=ax.transAxes, va='top')
+
+        # 如果数值很小，调整x轴刻度格式
+        if abs(mean_val) < 1e-3 or abs(mean_val) > 1e6:
+            ax.ticklabel_format(style='scientific', axis='x', scilimits=(0,0))
+
+        return fig
+    except Exception as e:
+        print(f"绘制Y列直方图时出错: {str(e)}")
+        return None
