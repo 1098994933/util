@@ -1,7 +1,8 @@
 """
 functions of plot figures
 """
-from typing import List, Optional
+import warnings
+from typing import Optional
 
 from matplotlib.figure import Figure
 from matplotlib.pylab import mpl
@@ -10,8 +11,9 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
+from scipy.spatial import QhullError
 from typing import Tuple
-import warnings
+from eval import compute_segment_data_qcut
 
 mpl.rcParams['font.sans-serif'] = ['SimHei']  # 显示中文
 mpl.rcParams['axes.unicode_minus'] = False  # 显示负号
@@ -144,7 +146,7 @@ def plot_corr(dataset: pd.DataFrame, targets: list, save_path: Optional[str] = N
     if not isinstance(targets, list) or len(targets) < 2:
         raise ValueError("targets应为包含至少两个特征名的列表")
 
-    corr_matrix = dataset[targets].corr()
+    corr_matrix = dataset[targets].corr().fillna(0)
     n_features = len(targets)
     # 动态计算图形尺寸
     base_size = 1.2  # 每个特征的基础尺寸单位
@@ -201,13 +203,13 @@ def plot_corr(dataset: pd.DataFrame, targets: list, save_path: Optional[str] = N
 
 
 def plot_feature_importance(
-        features: list,
-        feature_importance: np.ndarray,
-        n: int = 10,
-        save_path: Optional[str] = None,
-        figsize: Optional[tuple] = None,
-        color_map: str = 'viridis',
-        show_values: bool = True
+    features: list,
+    feature_importance: np.ndarray,
+    n: int = 10,
+    save_path: Optional[str] = None,
+    figsize: Optional[tuple] = None,
+    color_map: str = 'viridis',
+    show_values: bool = True
 ) -> Tuple[pd.DataFrame, plt.Figure]:
     """
     可视化特征重要性并返回绘图数据
@@ -307,11 +309,8 @@ def plot_feature_importance(
     return result_df, fig
 
 
-import shap
-import numpy as np
 
-
-def generate_shap_figures(model, X, fig_path='./figures/shap.png', n_features=5):
+def generate_shap_figures(model, X, fig_path=None, n_features=5):
     """
     Generate SHAP summary and dependence plots, and save them to files.
 
@@ -325,10 +324,11 @@ def generate_shap_figures(model, X, fig_path='./figures/shap.png', n_features=5)
         list: Top `n_features` feature names.
     """
     # Limit the number of features to the number of columns in X
+    import shap
     n_features = min(X.shape[1], n_features)
 
     # Determine the appropriate SHAP explainer
-    if type(model).__name__ in ["GradientBoostingRegressor", "RandomForestRegressor"]:
+    if type(model).__name__ in ["GradientBoostingRegressor", "RandomForestRegressor", "XGBRegressor", "LightGBMRegressor"]:
         explainer = shap.TreeExplainer(model, feature_perturbation="tree_path_dependent")
     else:
         explainer = shap.KernelExplainer(model.predict, X, keep_index=True)
@@ -353,11 +353,10 @@ def generate_shap_figures(model, X, fig_path='./figures/shap.png', n_features=5)
 
     # Generate and save dependence plots for top features
     for feature_name in top_features_names:
-        plt.figure(dpi=300)
-        shap.dependence_plot(feature_name, shap_values, X, show=False)
-        plt.savefig(f"{fig_path}_{feature_name}.png", bbox_inches='tight')
-        plt.close()
-
+        # 构建依赖图的文件路径
+        base_path = fig_path.replace('.png', '')
+        dependent_fig_path = f"{base_path}_{feature_name}.png"
+        generate_shap_dependent_plot(feature_name, shap_values, X, save_path=dependent_fig_path)
     # Close all remaining plots to release resources
     plt.close('all')
     return top_features_names
@@ -396,6 +395,7 @@ def plot_decision_tree(model, feature_names=None, class_names=None, save_path=No
         图形对象
     """
     from sklearn.tree import plot_tree
+    import matplotlib.pyplot as plt
 
     # 创建图形
     fig = plt.figure(figsize=figsize)
@@ -437,8 +437,12 @@ def process_1d_vectors(x, y, z, resolution=50):
     yi = np.linspace(min(y), max(y), resolution)
     X, Y = np.meshgrid(xi, yi)
 
-    # 使用线性插值填充网格
-    Z = griddata((x, y), z, (X, Y), method='linear')
+    try:
+        # use linear interpolation by default
+        Z = griddata((x, y), z, (X, Y), method='linear')
+    except QhullError:  # when initial simplex is not convex
+        # use nearest neighbor interpolation
+        Z = griddata((x, y), z, (X, Y), method='nearest')
 
     return X, Y, Z
 
@@ -592,6 +596,161 @@ def plot_grouped_contour(x, y, z, groups=None, resolution=50, levels=20, cmap="j
     return fig, axes
 
 
+def plot_group_scatter(x: pd.Series, y: pd.Series, groups: Optional[pd.Series] = None, figsize=(15, 10),
+                       title=None, return_data=False, index=None):
+    """
+    对x和y进行分组，并绘制，每个分组的x y 绘制一个散点图，添加线性趋势线，并显示公式和R^2值
+
+    Args:
+        x: pd.Series - x axis data
+        y: pd.Series - y axis data
+        groups: pd.Series, optional - group data, if None then default to one group
+        figsize: tuple - figure size
+        title: str, optional - figure title
+        return_data: bool, optional - whether to return data, default is False
+        index: pd.Series, optional - index data, if None then use index of x
+    """
+    # 参数验证
+    if len(x) != len(y):
+        raise ValueError("x列和y列的长度必须相同")
+
+    # label
+    x_label = x.name if isinstance(x, pd.Series) and x.name is not None else 'X轴'
+    y_label = y.name if isinstance(y, pd.Series) and y.name is not None else 'Y轴'
+
+    # 创建DataFrame并删除缺失值
+    df = pd.DataFrame({'x': x, 'y': y})
+    if index is not None:
+        df['index'] = index
+    else:
+        df['index'] = x.index
+    if groups is not None:
+        df['group'] = groups
+    df = df.dropna()
+    if len(df) == 0:
+        raise ValueError("dataset has no valid data")
+
+        # 如果groups为None，创建默认分组
+    if 'group' not in df.columns:
+        df['group'] = ' '
+
+    # 获取唯一的分组
+    unique_groups = df['group'].unique()
+
+    # exclude groups with less than 2 points (at least 2 points are needed to fit a line)
+    unique_groups = [group for group in unique_groups if len(df[df['group'] == group]) >= 2]
+    n_groups = len(unique_groups)  # number of valid groups
+
+    if n_groups == 0:
+        raise ValueError("no enough data in groups (at least 2 points are needed for each group)")
+
+    # calculate the number of rows and columns, make the subplot layout as close to a square as possible
+    n_cols = int(np.ceil(np.sqrt(n_groups)))
+    n_rows = int(np.ceil(n_groups / n_cols))
+
+    # 创建图形和子图
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize,
+                             sharex=False, sharey=False,
+                             squeeze=False)
+
+    # 用于存储每个组的回归统计信息（当return_data=True时使用）
+    group_stats = {}
+
+    # 绘制每个组的图表
+    for i, group in enumerate(unique_groups):
+        # 计算子图位置
+        row = i // n_cols
+        col = i % n_cols
+        ax = axes[row, col]
+
+        # 获取当前组的数据
+        group_data = df[df['group'] == group]
+        group_x = group_data['x'].values
+        group_y = group_data['y'].values
+
+        # 绘制散点图
+        ax.scatter(group_x, group_y, alpha=0.4, color="red", s=30, linewidth=0.5)
+
+        # 线性回归拟合
+        slope = None
+        intercept = None
+        r2 = None
+
+        if len(group_x) >= 2 and min(group_x) != max(group_x) and max(group_y) != min(group_y):
+            # 使用numpy.polyfit进行线性拟合（1次多项式）
+            coeffs = np.polyfit(group_x, group_y, 1)
+            slope = coeffs[0]  # 斜率
+            intercept = coeffs[1]  # 截距
+
+            # 计算R²值
+            y_pred = np.polyval(coeffs, group_x)
+            ss_res = np.sum((group_y - y_pred) ** 2)
+            ss_tot = np.sum((group_y - np.mean(group_y)) ** 2)
+            r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
+
+            # plot the trend line
+            x_line = np.linspace(group_x.min(), group_x.max(), 100)
+            y_line = np.polyval(coeffs, x_line)
+            ax.plot(x_line, y_line, 'b-', linewidth=2, label='trend line')
+
+            # display the formula and R² value on the figure
+            if intercept >= 0:
+                formula_text = f'$Y = {slope:.3g}x + {intercept:.3g}$'
+            else:
+                formula_text = f'$Y = {slope:.3g}x - {abs(intercept):.3g}$'
+
+            # display the formula and R² value on the top right corner of the figure
+            text_str = f'{formula_text}\n$R^2={r2:.3g}$'
+            ax.text(0.05, 0.95, text_str, transform=ax.transAxes, fontsize=12,
+                    verticalalignment='top', bbox=dict(facecolor='white', alpha=0.6))
+
+        # save the statistics information for return_data
+        group_stats[group] = {
+            'slope': slope,
+            'intercept': intercept,
+            'r2': r2
+        }
+
+        # set the title and labels of the subplot
+        ax.set_title(f"{group}", fontsize=15)
+        ax.set_xlabel(x_label, fontsize=12)
+        ax.set_ylabel(y_label, fontsize=12)
+        ax.grid(True, linestyle='--', alpha=0.7)
+        ax.legend(loc='best', fontsize=9)
+
+    # 隐藏空的子图
+    for i in range(n_groups, n_rows * n_cols):
+        row = i // n_cols
+        col = i % n_cols
+        axes[row, col].axis('off')
+
+    # add title
+    if title:
+        fig.suptitle(title, fontsize=18, y=0.95)
+    plt.tight_layout()
+    if return_data:
+        fig_data = []
+        for group in unique_groups:
+            group_data = df[df['group'] == group]
+            stats = group_stats.get(group, {})
+            fig_data.append({
+                'index': group_data['index'].tolist(),
+                'x': group_data['x'].tolist(),
+                'x_max': float(group_data['x'].max()),
+                'x_min': float(group_data['x'].min()),
+                'y': group_data['y'].tolist(),
+                'y_max': float(group_data['y'].max()),
+                'y_min': float(group_data['y'].min()),
+                'title': str(group),
+                'slope': stats.get('slope'),
+                'intercept': stats.get('intercept'),
+                'r2': stats.get('r2')
+            })
+        return fig_data
+    else:
+        return fig, axes
+
+
 def plot_group_by_freq_mean(x: pd.Series, y: pd.Series, groups: Optional[pd.Series] = None, figsize=(15, 10),
                             title=None):
     """
@@ -678,11 +837,11 @@ def plot_group_by_freq_mean(x: pd.Series, y: pd.Series, groups: Optional[pd.Seri
 
 
 def plot_group_time_rolling(time_col: pd.Series, x: pd.Series, y: pd.Series, groups: Optional[pd.Series] = None,
-                            figsize=(15, 10), title=None, max_segments: int = 30):
+                            figsize=(15, 10), title=None, max_segments: int = 30, return_data: bool = False):
     """
     对时间序列数据进行分组，并按时间顺序分段取平均值后绘制，提高大数据量时的绘图性能
 
-    参数:
+    Args:
         time_col: pd.Series - 时间列数据，用于排序和分段
         x: pd.Series - X轴数据，将显示在次坐标轴上
         y: pd.Series - Y轴数据，将显示在主坐标轴上
@@ -691,6 +850,7 @@ def plot_group_time_rolling(time_col: pd.Series, x: pd.Series, y: pd.Series, gro
         title: str, optional - 图形标题
         min_periods: int - 滚动窗口计算所需的最小观测数，默认为1
         max_segments: int - 每个分组最多分成的段数，默认为30
+        return_data: bool, optional - 是否返回数据，默认为False
     """
 
     # 参数验证
@@ -704,6 +864,8 @@ def plot_group_time_rolling(time_col: pd.Series, x: pd.Series, y: pd.Series, gro
 
     df = pd.DataFrame({'time': time_col, 'x': x, 'y': y})
     df = df.dropna()
+    df['time'] = pd.to_datetime(df['time'])
+    df.sort_values('time', inplace=True)
     if len(df) == 0:
         raise ValueError("dataset has no valid data")
     # 如果groups为None，创建默认分组
@@ -724,54 +886,6 @@ def plot_group_time_rolling(time_col: pd.Series, x: pd.Series, y: pd.Series, gro
     n_cols = int(np.ceil(np.sqrt(n_groups)))
     n_rows = int(np.ceil(n_groups / n_cols))
 
-    # 预处理：按组排序并计算分段数据
-    def compute_segment_data_vectorized(group_data, max_segments):
-        """使用完全向量化的numpy操作计算分段数据"""
-        n_data = len(group_data)
-        if n_data <= 1:
-            return np.array([]), np.array([]), np.array([])
-
-        n_segments = min(max_segments, n_data)  # number of time segment
-        segment_indices = np.linspace(0, n_data - 1, n_segments, dtype=int)
-
-        # 转换为numpy数组以提高性能
-        time_values = group_data['time'].values
-        x_values = group_data['x'].values
-        y_values = group_data['y'].values
-
-        # 完全向量化的分段计算
-        n_segments_actual = len(segment_indices) - 1
-        if n_segments_actual == 0:
-            return np.array([]), np.array([]), np.array([])
-
-        # 创建分段索引
-        start_indices = segment_indices[:-1]
-        end_indices = segment_indices[1:]
-
-        # 使用numpy的高级索引和广播进行完全向量化计算
-        # plot data ponits
-        segment_times = []
-        segment_x_means = np.zeros(n_segments_actual)
-        segment_y_means = np.zeros(n_segments_actual)
-
-        # 检查时间列是否为字符串类型
-        is_time_string = pd.api.types.is_string_dtype(time_values) or (len(time_values) > 0 and isinstance(time_values[0], str))
-
-        for i, (start, end) in enumerate(zip(start_indices, end_indices)):
-            # 处理时间列：根据数据类型选择合适的方法
-            if is_time_string:
-                segment_time = group_data['time'].iloc[start:end+1].min()
-            else:
-                segment_time = np.min(time_values[start:end+1])
-
-            segment_times.append(segment_time)
-            segment_x_means[i] = np.mean(x_values[start:end+1])
-            segment_y_means[i] = np.mean(y_values[start:end+1])
-
-        segment_times = np.array(segment_times)
-
-        return segment_times, segment_x_means, segment_y_means
-
     # 一次性计算所有组的分段数据，避免重复计算
     group_segment_data = {}
     all_x_values = []
@@ -784,7 +898,7 @@ def plot_group_time_rolling(time_col: pd.Series, x: pd.Series, y: pd.Series, gro
     grouped_data = df_sorted.groupby('group')
 
     for group, group_data in grouped_data:
-        segment_times, segment_x_means, segment_y_means = compute_segment_data_vectorized(group_data, max_segments)
+        segment_times, segment_x_means, segment_y_means = compute_segment_data_qcut(group_data, max_segments)
 
         group_segment_data[group] = {
             'times': segment_times,
@@ -815,7 +929,7 @@ def plot_group_time_rolling(time_col: pd.Series, x: pd.Series, y: pd.Series, gro
 
         # 获取预计算的分段数据
         segment_data = group_segment_data[group]
-        segment_times = segment_data['times']
+        segment_times = [str(i) for i in pd.to_datetime(segment_data['times'], unit='s')]
         segment_x_means = segment_data['x_means']
         segment_y_means = segment_data['y_means']
 
@@ -834,9 +948,20 @@ def plot_group_time_rolling(time_col: pd.Series, x: pd.Series, y: pd.Series, gro
         lines1, labels1 = ax.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
 
-        ax2.legend(lines1 + lines2, labels1 + labels2, loc='upper center',bbox_to_anchor=(0.5, -0.10),fontsize=12)
+        ax2.legend(lines1 + lines2, labels1 + labels2, loc='upper center', bbox_to_anchor=(0.5, -0.10), fontsize=12)
 
-    fig.autofmt_xdate(rotation=45)
+        # 为每个子图单独设置x轴标签格式和旋转
+        if len(segment_times) > 0:
+            # 根据数据点数量调整x轴标签显示
+            if len(segment_times) > 10:
+                # 如果数据点较多，只显示部分标签
+                step = max(1, len(segment_times) // 10)
+                ax.set_xticks(range(0, len(segment_times), step))
+                ax.set_xticklabels([segment_times[i] for i in range(0, len(segment_times), step)], rotation=45, ha='right')
+            else:
+                # 如果数据点较少，显示所有标签
+                ax.set_xticks(range(len(segment_times)))
+                ax.set_xticklabels(segment_times, rotation=45, ha='right')
 
     # 隐藏空的子图
     for i in range(n_groups, n_rows * n_cols):
@@ -849,10 +974,44 @@ def plot_group_time_rolling(time_col: pd.Series, x: pd.Series, y: pd.Series, gro
         fig.suptitle(title, fontsize=18, y=0.95)
     plt.tight_layout()
 
-    return fig, axes
+    if return_data:
+        # 返回绘图数据
+        fig_data = []
+        for group in unique_groups:
+            segment_data = group_segment_data.get(group, {})
+            segment_times = segment_data.get('times', np.array([]))
+            segment_x_means = segment_data.get('x_means', np.array([]))
+            segment_y_means = segment_data.get('y_means', np.array([]))
+
+            # 转换numpy数组为列表，处理时间类型
+            times_list = segment_times.tolist() if len(segment_times) > 0 else []
+            # 如果时间不是字符串，转换为字符串格式
+            if len(times_list) > 0 and not isinstance(times_list[0], str):
+                try:
+                    times_list = [pd.Timestamp(t).strftime('%Y-%m-%d %H:%M:%S') if pd.notna(t) else None for t in times_list]
+                except Exception:
+                    times_list = [str(t) if pd.notna(t) else None for t in times_list]
+
+            fig_data.append({
+                'title': str(group),
+                'time': times_list,
+                'x': segment_x_means.tolist() if len(segment_x_means) > 0 else [],
+                'x_max': float(segment_x_means.max()),
+                'x_min': float(segment_x_means.min()),
+                'y': segment_y_means.tolist() if len(segment_y_means) > 0 else [],
+                'y_max': float(segment_y_means.max()),
+                'y_min': float(segment_y_means.min()),
+                'x_label': x_label,
+                'y_label': y_label,
+                'time_label': time_label
+            })
+        return fig_data
+    else:
+        return fig, axes
 
 
-def plot_rf_corr(df: pd.DataFrame, y_col: str, top_features: list, n: int = 10, save_path: str = None, title: str = None):
+def plot_rf_corr(df: pd.DataFrame, y_col: str, top_features: list, n: int = 10, save_path: str = None,
+                 title: str = None):
     """
     绘制因变量和前n个重要特征的相关性热图
     :param df: 数据集DataFrame
@@ -872,11 +1031,11 @@ def plot_y_histogram(y_series, bins=20):
     绘制Y列直方图
 
     Args:
-        y_series: pandas Series，Y列数据
-        bins: 直方图bin数量，默认20
+        y_series: pandas Series, Y column data
+        bins: number of bins for the histogram, default is 20
 
     Returns:
-        matplotlib.figure.Figure: 直方图fig对象，失败时返回None
+        matplotlib.figure.Figure
     """
     try:
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -911,13 +1070,29 @@ def plot_y_histogram(y_series, bins=20):
         # 添加统计量：均值 标准差 范围[最小值-最大值]
         ax.text(0.02, 0.98, f'mean: {format_number(mean_val)}', transform=ax.transAxes, va='top')
         ax.text(0.02, 0.93, f'std: {format_number(std_val)}', transform=ax.transAxes, va='top')
-        ax.text(0.02, 0.88, f'range: {format_number(min_val)} - {format_number(max_val)}', transform=ax.transAxes, va='top')
+        ax.text(0.02, 0.88, f'range: {format_number(min_val)} - {format_number(max_val)}', transform=ax.transAxes,
+                va='top')
 
         # 如果数值很小，调整x轴刻度格式
         if abs(mean_val) < 1e-3 or abs(mean_val) > 1e6:
-            ax.ticklabel_format(style='scientific', axis='x', scilimits=(0,0))
+            ax.ticklabel_format(style='scientific', axis='x', scilimits=(0, 0))
 
         return fig
     except Exception as e:
         print(f"绘制Y列直方图时出错: {str(e)}")
         return None
+
+def generate_shap_dependent_plot(feature_name, shap_values, x, save_path=None):
+    """
+    generate shap dependent plot
+    :param feature_name: feature name
+    :param shap_values: shap values
+    :param x: input data
+    :param save_path: figure save path
+    :return: figure
+    """
+    import shap
+    shap.dependence_plot(feature_name, shap_values, x, show=False, interaction_index=None)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    plt.close()

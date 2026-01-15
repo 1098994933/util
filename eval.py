@@ -283,3 +283,54 @@ def score_dp_by_forward_holdout(model, X_train, Y_train, alpha=None,
     y_inter_true = y_inter_true
     score = discovery_precision(y_extra_predict, y_inter_predict, y_extra_true, y_inter_true, alpha=alpha)
     return score, y_extra_predict, y_inter_predict, y_extra_true, y_inter_true
+def compute_segment_data_qcut(group_data, max_segments=30):
+    """
+    对时间序列数据进行分组，并按时间顺序分段取平均值
+    Args:
+        group_data: pd.DataFrame - 分组数据
+        max_segments: int - 每个分组最多分成的段数
+    Returns:
+        segment_times: np.array - 分段时间
+        segment_x_means: np.array - 分段x均值
+        segment_y_means: np.array - 分段y均值
+    """
+    n_data = len(group_data)
+    if n_data <= 1:
+        return np.array([]), np.array([]), np.array([])
+    # if n_data < max_segments, return all data
+    if n_data <= max_segments:
+        return group_data['time'].values, group_data['x'].values, group_data['y'].values
+    # 计算实际分段数（与原函数逻辑一致：n_segments-1）
+    n_segments = min(max_segments, n_data)
+    n_segments_actual = n_segments - 1
+    if n_segments_actual <= 0:
+        return np.array([]), np.array([]), np.array([])
+
+    # 生成顺序索引（表示数据的位置顺序，用于分箱）
+    group_data = group_data.assign(order=np.arange(n_data))
+
+    # 使用qcut进行等频分箱，分箱数为实际分段数
+    # duplicates='drop'避免因分位数重复导致的报错
+    group_data['bin'] = pd.qcut(
+        group_data['order'],
+        q=n_segments_actual,
+        labels=False,
+        duplicates='drop'
+    )
+
+    # 按分箱标签分组，聚合计算所需统计量
+    grouped = group_data.groupby('bin', as_index=False).agg(
+        segment_time=('time', 'min'),  # 分段内time的最小值
+        segment_x_mean=('x', 'mean'),  # 分段内x的均值
+        segment_y_mean=('y', 'mean')  # 分段内y的均值
+    )
+
+    # 确保按分箱顺序排列（保证结果与原函数分段顺序一致）
+    grouped = grouped.sort_values('bin')
+
+    # 提取结果并转换为numpy数组
+    segment_times = grouped['segment_time'].values
+    segment_x_means = grouped['segment_x_mean'].values
+    segment_y_means = grouped['segment_y_mean'].values
+
+    return segment_times, segment_x_means, segment_y_means
