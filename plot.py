@@ -396,7 +396,6 @@ def plot_decision_tree(model, feature_names=None, class_names=None, save_path=No
         图形对象
     """
     from sklearn.tree import plot_tree
-    import matplotlib.pyplot as plt
 
     # 创建图形
     fig = plt.figure(figsize=figsize)
