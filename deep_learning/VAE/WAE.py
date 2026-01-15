@@ -1,8 +1,11 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+import sys
+import os
+# 添加项目根目录到 Python 路径
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from typing import List
-from util.deep_learning.VAE.base import OneDimensionalDataset
 
 import torch
 import torch.nn as nn
