@@ -5,16 +5,18 @@ import sys
 import os
 # 添加项目根目录到 Python 路径
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
+from alloys_features import CHEMICAL_ELEMENTS
 import pandas as pd
 import torch
 from deep_learning.VAE.WAE import WAETrainer
 from deep_learning.VAE.base import OneDimensionalDataset
-
+from ProjectConfig import Config
+project_dataset_path = Config['project_dataset_path']
 if __name__ == '__main__':
     # 一维向量数据
-    dataset = pd.read_csv(r"../project_data/1_phase_ml_dataset.csv")
-    elements_col = list(dataset.columns[:-1])
+    dataset = pd.read_csv(os.path.join(project_dataset_path, "1_phase_ml_dataset.csv"))
+    elements_col = [col for col in dataset.columns if col in CHEMICAL_ELEMENTS]
+    print(elements_col)
     df_element = dataset[elements_col]
     # 计算合金的组分个数
     df_element["N_alloy"] = df_element.astype(bool).sum(axis=1)

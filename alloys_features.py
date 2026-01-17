@@ -1,16 +1,19 @@
 """
 knowledge-aware feature calculation
 """
+import sys
 import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
+print(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
 import pandas as pd
 import numpy as np
 from itertools import combinations
 import re
-from util.Config import Config
+from .UtilConfig import Config
 
 project_dataset_path = Config['project_dataset_path']
 element_data = pd.read_excel(os.path.join(project_dataset_path, "element_data.xlsx"), index_col=0)
-
+CHEMICAL_ELEMENTS = element_data.index.tolist()
 
 def find_elements(string):
     """
@@ -348,6 +351,7 @@ class AlloyFeature(object):
 
 
 if __name__ == '__main__':
+    pass
     # d = find_elements("ZrCu")
     # print(d)
     # d = find_elements("AlCrFeNiMo0.5")
@@ -366,10 +370,10 @@ if __name__ == '__main__':
     # af = AlloyFeature(ci, ei)
 
     # knowledge-aware feature calculation for training dataset
-    dataset = pd.read_csv("../data/formula_Ga-In-Sn-Bi.csv")
-    df1 = formula_to_features(dataset['formula'])
-    print(df1)
-    df1.to_csv("../data/alloy_features.csv", index=False)
+    # dataset = pd.read_csv("../data/formula_Ga-In-Sn-Bi.csv")
+    # df1 = formula_to_features(dataset['formula'])
+    # print(df1)
+    # df1.to_csv("../data/alloy_features.csv", index=False)
 
     # designed alloys knowledge-aware feature calculation
     # designed_dataset = pd.read_csv("../data/formula_design.csv")

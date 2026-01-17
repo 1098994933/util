@@ -16,7 +16,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPRegressor
 import xgboost as xgb
-from Config import Config
+from ProjectConfig import Config
 from eval import cal_reg_metric, cv, score_dp_by_forward_holdout
 from feature_explainer.SHAPExplainer import SHAPExplainer
 
